@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# WhatsApp session data (contains auth tokens - DO NOT COMMIT)
+.wwebjs_auth/
+.wwebjs_cache/

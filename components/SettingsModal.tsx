@@ -1,34 +1,64 @@
 
-import React, { useState } from 'react';
-import { X, Moon, Sun, Smartphone, Plus, Check, Mail, ArrowLeft, Loader2, Lock, Shield } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Moon, Sun, Smartphone, Plus, Check, Mail, ArrowLeft, Loader2, Lock, Shield, QrCode, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Platform, PlatformConfig } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
+import { useWhatsApp } from '../hooks/useWhatsApp';
+
+// Platforms that use QR code pairing instead of credentials
+const QR_CODE_PLATFORMS = [Platform.WhatsApp, Platform.WhatsAppBusiness];
+// Note: Signal and Telegram would need their own server implementations
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentTheme: string;
   onSetTheme: (theme: 'dark' | 'dimmed' | 'light') => void;
+  onWhatsAppConnected?: (user: { id: string; name: string; phone: string }) => void;
 }
 
-const SettingsModal: React.FC<SettingsModalProps> = ({ 
-  isOpen, 
-  onClose, 
+const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
   currentTheme,
-  onSetTheme 
+  onSetTheme,
+  onWhatsAppConnected
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'accounts'>('general');
   const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
-    [Platform.Mail]: true,
-    [Platform.WhatsApp]: true,
-    [Platform.Signal]: true,
+    [Platform.Mail]: false,
+    [Platform.WhatsApp]: false,
+    [Platform.Signal]: false,
   });
 
   // Add Account Flow State
-  const [addAccountStep, setAddAccountStep] = useState<'list' | 'select' | 'form'>('list');
+  const [addAccountStep, setAddAccountStep] = useState<'list' | 'select' | 'form' | 'qr'>('list');
   const [selectedPlatformToAdd, setSelectedPlatformToAdd] = useState<Platform | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [credentialValues, setCredentialValues] = useState({ identifier: '', secret: '' });
+
+  // WhatsApp real connection
+  const whatsapp = useWhatsApp('merge-app');
+
+  // Sync WhatsApp connection status
+  useEffect(() => {
+    if (whatsapp.status === 'ready' && whatsapp.user) {
+      setConnectedAccounts(prev => ({ ...prev, [Platform.WhatsApp]: true }));
+      if (onWhatsAppConnected) {
+        onWhatsAppConnected(whatsapp.user);
+      }
+      // Return to list after successful connection
+      if (addAccountStep === 'qr' && selectedPlatformToAdd === Platform.WhatsApp) {
+        setTimeout(() => {
+          setAddAccountStep('list');
+          setSelectedPlatformToAdd(null);
+        }, 1500);
+      }
+    } else if (whatsapp.status === 'disconnected') {
+      setConnectedAccounts(prev => ({ ...prev, [Platform.WhatsApp]: false }));
+    }
+  }, [whatsapp.status, whatsapp.user, addAccountStep, selectedPlatformToAdd, onWhatsAppConnected]);
 
   if (!isOpen) return null;
 
@@ -52,14 +82,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleSelectPlatform = (p: Platform) => {
     setSelectedPlatformToAdd(p);
-    setAddAccountStep('form');
-    setCredentialValues({ identifier: '', secret: '' });
+    if (QR_CODE_PLATFORMS.includes(p)) {
+      setAddAccountStep('qr');
+      // Start real WhatsApp connection
+      if (p === Platform.WhatsApp || p === Platform.WhatsAppBusiness) {
+        whatsapp.connect();
+      }
+    } else {
+      setAddAccountStep('form');
+      setCredentialValues({ identifier: '', secret: '' });
+    }
   };
 
   const handleBack = () => {
-    if (addAccountStep === 'form') {
+    if (addAccountStep === 'form' || addAccountStep === 'qr') {
       setAddAccountStep('select');
       setSelectedPlatformToAdd(null);
+      // Disconnect WhatsApp if we're backing out
+      if (whatsapp.status !== 'disconnected' && whatsapp.status !== 'ready') {
+        whatsapp.disconnect();
+      }
     } else if (addAccountStep === 'select') {
       setAddAccountStep('list');
     }
@@ -126,10 +168,137 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 
+  const renderQrCodeFlow = () => {
+    if (!selectedPlatformToAdd) return null;
+    const config = PLATFORM_CONFIG[selectedPlatformToAdd];
+    const isWhatsApp = selectedPlatformToAdd === Platform.WhatsApp || selectedPlatformToAdd === Platform.WhatsAppBusiness;
+
+    return (
+      <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
+        <div className="flex items-center gap-2 mb-6">
+          <button onClick={handleBack} className="p-1 hover:bg-theme-hover rounded-full text-theme-muted transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${config.bgColor} text-white`}>
+              <span className="font-bold text-[9px]">{selectedPlatformToAdd.toString().substring(0, 2)}</span>
+            </div>
+            <h3 className="text-lg font-bold text-theme-main">Connect {config.label}</h3>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full">
+          {/* QR Code Container */}
+          <div className={`relative bg-white p-4 rounded-2xl shadow-2xl mb-6 transition-all`}>
+            {/* Loading / Connecting state */}
+            {(whatsapp.status === 'connecting' || whatsapp.status === 'disconnected') && isWhatsApp && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
+                <span className="text-sm text-gray-500">Starting WhatsApp...</span>
+              </div>
+            )}
+
+            {/* QR Code from WhatsApp */}
+            {whatsapp.status === 'qr' && whatsapp.qrCode && isWhatsApp && (
+              <div className="w-64 h-64">
+                <QRCodeSVG
+                  value={whatsapp.qrCode}
+                  size={256}
+                  level="M"
+                  marginSize={0}
+                />
+              </div>
+            )}
+
+            {/* Authenticated - waiting for ready */}
+            {whatsapp.status === 'authenticated' && isWhatsApp && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-12 h-12 text-green-500 animate-spin" />
+                <span className="text-sm font-bold text-green-600">Authenticating...</span>
+              </div>
+            )}
+
+            {/* Connected */}
+            {whatsapp.status === 'ready' && isWhatsApp && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <CheckCircle2 className="w-16 h-16 text-green-500" />
+                <span className="text-sm font-bold text-green-600">Connected!</span>
+                {whatsapp.user && (
+                  <span className="text-xs text-gray-500">{whatsapp.user.name}</span>
+                )}
+              </div>
+            )}
+
+            {/* Error state */}
+            {whatsapp.status === 'error' && isWhatsApp && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <AlertCircle className="w-12 h-12 text-red-500" />
+                <span className="text-sm font-bold text-red-500">Connection Error</span>
+                <span className="text-xs text-gray-500 text-center px-4">{whatsapp.error}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="text-center space-y-4">
+            <h4 className="text-lg font-bold text-theme-main">
+              {whatsapp.status === 'ready' ? 'Successfully Connected!' : `Scan with ${config.label}`}
+            </h4>
+
+            {whatsapp.status === 'qr' && (
+              <ol className="text-sm text-theme-muted space-y-2 text-left">
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+                  <span>Open {config.label} on your phone</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+                  <span>Go to Settings → Linked Devices</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+                  <span>Tap "Link a Device" and scan this code</span>
+                </li>
+              </ol>
+            )}
+
+            {whatsapp.status === 'error' && (
+              <button
+                onClick={() => whatsapp.connect()}
+                className="flex items-center gap-2 mx-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </button>
+            )}
+
+            {/* Server hint */}
+            {(whatsapp.status === 'error' || whatsapp.status === 'connecting') && (
+              <p className="text-xs text-theme-muted opacity-75 mt-4 max-w-xs">
+                Make sure the WhatsApp server is running:<br />
+                <code className="bg-theme-base px-2 py-1 rounded text-[10px] block mt-1">
+                  node server/whatsapp-server.js
+                </code>
+              </p>
+            )}
+          </div>
+
+          {/* Security note */}
+          <div className="mt-6 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-start gap-3 max-w-sm">
+            <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
+            <p className="text-xs text-green-300/90 leading-relaxed">
+              Your messages stay end-to-end encrypted. Merge syncs via WhatsApp Web protocol.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderAccountForm = () => {
       if (!selectedPlatformToAdd) return null;
       const config = PLATFORM_CONFIG[selectedPlatformToAdd];
-      
+
       return (
         <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
              <div className="flex items-center gap-2 mb-6">
@@ -362,6 +531,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 
                 {/* Add Account Flows */}
                 {addAccountStep === 'select' && renderPlatformSelection()}
+                {addAccountStep === 'qr' && renderQrCodeFlow()}
                 {addAccountStep === 'form' && renderAccountForm()}
               </>
             )}
