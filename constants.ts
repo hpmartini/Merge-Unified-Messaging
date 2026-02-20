@@ -6,7 +6,7 @@ import { Platform, User, Message, PlatformConfig } from './types';
 export const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   [Platform.WhatsApp]: { id: Platform.WhatsApp, label: 'WhatsApp', color: 'text-green-500', bgColor: 'bg-green-500', lineColor: '#22c55e' },
   [Platform.Signal]: { id: Platform.Signal, label: 'Signal', color: 'text-blue-500', bgColor: 'bg-blue-500', lineColor: '#3b82f6' },
-  [Platform.Mail]: { id: Platform.Mail, label: 'Google Mail', color: 'text-amber-500', bgColor: 'bg-amber-500', lineColor: '#f59e0b' },
+  [Platform.Mail]: { id: Platform.Mail, label: 'GMail', color: 'text-amber-500', bgColor: 'bg-amber-500', lineColor: '#f59e0b' },
   [Platform.SMS]: { id: Platform.SMS, label: 'SMS', color: 'text-purple-500', bgColor: 'bg-purple-500', lineColor: '#a855f7' },
   [Platform.Twitter]: { id: Platform.Twitter, label: 'X / Twitter', color: 'text-white', bgColor: 'bg-slate-500', lineColor: '#94a3b8' },
   [Platform.LinkedIn]: { id: Platform.LinkedIn, label: 'LinkedIn', color: 'text-cyan-500', bgColor: 'bg-cyan-500', lineColor: '#06b6d4' },

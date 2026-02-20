@@ -45,27 +45,27 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="w-full md:w-80 bg-theme-panel border-r border-theme flex flex-col h-full flex-shrink-0 z-30">
+    <div className="w-full md:w-16 lg:w-80 bg-theme-panel border-r border-theme flex flex-col h-full flex-shrink-0 z-30 group/sidebar">
       {/* Header */}
-      <div className="p-4 border-b border-theme flex items-center gap-2">
+      <div className="p-4 lg:p-4 md:p-2 border-b border-theme flex items-center gap-2 md:justify-center lg:justify-start">
         <GitBranch className="text-blue-500 w-6 h-6" />
-        <span className="font-bold text-lg tracking-tight text-theme-main">Merge</span>
-        <span className="text-xs bg-theme-base text-theme-muted px-2 py-0.5 rounded ml-auto border border-theme">v1.1.0</span>
+        <span className="font-bold text-lg tracking-tight text-theme-main md:hidden lg:inline">Merge</span>
+        <span className="text-xs bg-theme-base text-theme-muted px-2 py-0.5 rounded ml-auto border border-theme md:hidden lg:inline">v1.1.0</span>
       </div>
 
-      {/* Search Bar */}
-      <div className="p-3">
+      {/* Search Bar - hidden in collapsed mode */}
+      <div className="p-3 md:hidden lg:block">
         <div className="relative group">
           <Search className={`absolute left-3 top-2.5 w-4 h-4 transition-colors ${isSearching ? 'text-blue-500' : 'text-theme-muted'}`} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search all messages..." 
+            placeholder="Search all messages..."
             className="w-full bg-theme-base border border-theme rounded-md py-2 pl-9 pr-9 text-sm text-theme-main focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-slate-500 transition-all"
           />
           {isSearching && (
-            <button 
+            <button
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-2.5 text-theme-muted hover:text-theme-main transition-colors"
             >
@@ -79,37 +79,49 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {!isSearching ? (
           <>
-            <div className="px-4 pb-2 text-[10px] font-bold text-theme-muted uppercase tracking-widest mt-2 flex items-center justify-between">
+            <div className="px-4 pb-2 text-[10px] font-bold text-theme-muted uppercase tracking-widest mt-2 flex items-center justify-between md:hidden lg:flex">
               <span>Contacts</span>
               <span className="text-[9px] bg-theme-base px-1.5 rounded-full">{users.length}</span>
             </div>
-            <ul>
+            <ul className="md:px-1 lg:px-0">
               {users.map(user => (
                 <li key={user.id}>
                   <button
                     onClick={() => onSelectUser(user)}
-                    className={`w-full text-left px-3 py-3 rounded-md flex items-center gap-3 transition-all ${
-                      selectedUser.id === user.id 
-                        ? 'bg-theme-hover border-l-2 border-blue-500' 
-                        : 'hover:bg-theme-hover border-l-2 border-transparent'
+                    className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
+                      selectedUser.id === user.id
+                        ? 'bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-blue-500'
+                        : 'hover:bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-transparent'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner ${
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${
                        selectedUser.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
                     }`}>
                       {user.avatarInitials}
                     </div>
-                    
-                    <div className="flex-1 min-w-0">
+
+                    {/* Platform dots - below avatar in collapsed mode */}
+                    <div className="hidden md:flex lg:hidden items-center justify-center gap-1 mt-0.5">
+                      {user.activePlatforms.slice(0, 4).map(p => (
+                        <div
+                          key={p}
+                          className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`}
+                          title={PLATFORM_CONFIG[p].label}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Full info - hidden in collapsed mode */}
+                    <div className="flex-1 min-w-0 md:hidden lg:block">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-theme-main truncate text-sm">{user.name}</span>
                         <span className="text-[10px] text-theme-muted font-mono">2m</span>
                       </div>
                       <div className="flex items-center gap-1.5 mt-1">
                         {user.activePlatforms.slice(0, 3).map(p => (
-                          <div 
-                            key={p} 
-                            className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`} 
+                          <div
+                            key={p}
+                            className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`}
                             title={PLATFORM_CONFIG[p].label}
                           />
                         ))}
@@ -187,13 +199,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer Controls */}
-      <div className="p-3 border-t border-theme">
+      <div className="p-3 md:p-2 lg:p-3 border-t border-theme">
         <button
           onClick={onOpenSettings}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-theme-muted hover:text-theme-main hover:bg-theme-hover rounded-md transition-colors"
+          className="w-full flex items-center gap-2 px-3 py-2 md:justify-center lg:justify-start text-sm font-medium text-theme-muted hover:text-theme-main hover:bg-theme-hover rounded-md transition-colors"
         >
           <Settings className="w-4 h-4" />
-          <span>Settings</span>
+          <span className="md:hidden lg:inline">Settings</span>
         </button>
       </div>
     </div>
