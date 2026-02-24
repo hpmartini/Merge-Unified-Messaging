@@ -9,13 +9,15 @@ import PDFViewer from './components/PDFViewer';
 import SettingsModal from './components/SettingsModal';
 import { USERS, INITIAL_MESSAGES, PLATFORM_CONFIG } from './constants';
 import { User, Message, Platform, Attachment } from './types';
+import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GoogleGenAI } from "@google/genai";
-import { Share2, Filter, MessagesSquare, FolderOpen, UploadCloud, Search, ChevronUp, ChevronDown, X, Bot, Sparkles, Loader2, ArrowLeft, Clock, Users } from 'lucide-react';
+import { Share2, Filter, MessagesSquare, FolderOpen, UploadCloud, Search, ChevronUp, ChevronDown, X, Bot, Sparkles, Loader2, ArrowLeft, Clock, Users, MessageCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   // --- State ---
+  const [users, setUsers] = useState<User[]>(USERS);
   const [selectedUser, setSelectedUser] = useState<User>(USERS[0]);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [visiblePlatforms, setVisiblePlatforms] = useState<Set<Platform>>(new Set(Object.values(Platform)));
@@ -23,13 +25,99 @@ const App: React.FC = () => {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<Attachment | null>(null);
   const [activePDF, setActivePDF] = useState<Attachment | null>(null);
-  
+
   // Mobile View State
   const [showMobileChat, setShowMobileChat] = useState(false);
 
   // Settings & Theme
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'dimmed' | 'light'>('dark');
+
+  // WhatsApp Integration
+  const handleWhatsAppMessage = useCallback((waMsg: WhatsAppMessage) => {
+    // Convert WhatsApp message to app Message format
+    const newMessage: Message = {
+      id: `wa-${waMsg.id}`,
+      userId: `wa-${waMsg.contactId}`,
+      platform: Platform.WhatsApp,
+      content: waMsg.body,
+      timestamp: new Date(waMsg.timestamp * 1000),
+      isMe: waMsg.fromMe,
+      hash: waMsg.id.substring(0, 7),
+    };
+
+    setMessages(prev => {
+      // Check if message already exists
+      if (prev.find(m => m.id === newMessage.id)) return prev;
+      return [...prev, newMessage];
+    });
+  }, []);
+
+  const handleWhatsAppChatsLoaded = useCallback((chats: WhatsAppChat[]) => {
+    // Convert WhatsApp chats to Users
+    const waUsers: User[] = chats
+      .filter(chat => !chat.isGroup) // Only individual chats for now
+      .map(chat => ({
+        id: `wa-${chat.id.replace('@c.us', '')}`,
+        name: chat.name,
+        avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+        activePlatforms: [Platform.WhatsApp],
+        role: 'WhatsApp Contact'
+      }));
+
+    setUsers(prev => {
+      // Merge with existing users, avoid duplicates
+      const existingIds = new Set(prev.map(u => u.id));
+      const newUsers = waUsers.filter(u => !existingIds.has(u.id));
+      return [...prev, ...newUsers];
+    });
+  }, []);
+
+  const handleWhatsAppMessagesLoaded = useCallback((chatId: string, waMessages: WhatsAppMessage[]) => {
+    const userId = `wa-${chatId.replace('@c.us', '')}`;
+
+    const newMessages: Message[] = waMessages.map(waMsg => ({
+      id: `wa-${waMsg.id}`,
+      userId: userId,
+      platform: Platform.WhatsApp,
+      content: waMsg.body,
+      timestamp: new Date(waMsg.timestamp * 1000),
+      isMe: waMsg.fromMe,
+      hash: waMsg.id.substring(0, 7),
+    }));
+
+    setMessages(prev => {
+      // Filter out duplicates
+      const existingIds = new Set(prev.map(m => m.id));
+      const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const whatsapp = useWhatsApp('merge-app', {
+    onMessage: handleWhatsAppMessage,
+    onChatsLoaded: handleWhatsAppChatsLoaded,
+    onMessagesLoaded: handleWhatsAppMessagesLoaded,
+  });
+
+  // Auto-connect to WhatsApp on app startup (if session exists, it will reconnect)
+  useEffect(() => {
+    // Small delay to let the app render first
+    const timer = setTimeout(() => {
+      console.log('[App] Auto-connecting to WhatsApp...');
+      whatsapp.connect();
+    }, 500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run once on mount - intentionally not including whatsapp.connect to prevent re-runs
+
+  // Load messages when selecting a WhatsApp user
+  useEffect(() => {
+    if (selectedUser.id.startsWith('wa-') && whatsapp.status === 'ready') {
+      const chatId = selectedUser.id.replace('wa-', '') + '@c.us';
+      whatsapp.getMessages(chatId, 100);
+    }
+  }, [selectedUser.id, whatsapp.status]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,7 +225,7 @@ const App: React.FC = () => {
   };
 
   const handleSearchResultClick = (message: Message) => {
-    const user = USERS.find(u => u.id === message.userId);
+    const user = users.find(u => u.id === message.userId);
     if (user) {
       setTargetMessageId(message.id);
       setSelectedUser(user);
@@ -201,7 +289,13 @@ const App: React.FC = () => {
       replyToContent: replyingTo?.content,
       attachments: attachments || [],
     };
-    
+
+    // Send via WhatsApp if it's a WhatsApp contact and platform is WhatsApp
+    if (selectedUser.id.startsWith('wa-') && platform === Platform.WhatsApp && whatsapp.status === 'ready') {
+      const chatId = selectedUser.id.replace('wa-', '') + '@c.us';
+      whatsapp.sendMessage(chatId, content);
+    }
+
     setMessages([...messages, newMessage]);
     setReplyingTo(null);
     setDraftAttachments([]);
@@ -320,10 +414,10 @@ const App: React.FC = () => {
       
       {/* Mobile: Toggle Sidebar visibility */}
       <div className={`${showMobileChat ? 'hidden' : 'flex'} w-full md:w-auto md:flex h-full`}>
-        <Sidebar 
-            users={USERS} 
-            selectedUser={selectedUser} 
-            onSelectUser={handleUserSelection} 
+        <Sidebar
+            users={users}
+            selectedUser={selectedUser}
+            onSelectUser={handleUserSelection}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             searchResults={globalSearchResults}
@@ -646,11 +740,12 @@ const App: React.FC = () => {
         onClose={() => setActivePDF(null)} 
       />
 
-      <SettingsModal 
+      <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         currentTheme={theme}
         onSetTheme={setTheme}
+        whatsapp={whatsapp}
       />
 
     </div>

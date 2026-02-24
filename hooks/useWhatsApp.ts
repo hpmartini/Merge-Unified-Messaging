@@ -13,25 +13,36 @@ export interface WhatsAppChat {
   unreadCount: number;
   lastMessage?: string;
   timestamp?: number;
+  profilePicUrl?: string;
 }
 
 export interface WhatsAppMessage {
   id: string;
+  chatId: string;
   body: string;
   fromMe: boolean;
   timestamp: number;
   contactName: string;
+  contactId: string;
   hasMedia: boolean;
   type: string;
 }
 
 export type WhatsAppStatus = 'disconnected' | 'connecting' | 'qr' | 'authenticated' | 'ready' | 'error';
 
+interface UseWhatsAppOptions {
+  onMessage?: (message: WhatsAppMessage) => void;
+  onChatsLoaded?: (chats: WhatsAppChat[]) => void;
+  onMessagesLoaded?: (chatId: string, messages: WhatsAppMessage[]) => void;
+  onReady?: (user: WhatsAppUser) => void;
+}
+
 interface UseWhatsAppReturn {
   status: WhatsAppStatus;
   qrCode: string | null;
   user: WhatsAppUser | null;
   chats: WhatsAppChat[];
+  messages: Map<string, WhatsAppMessage[]>;
   error: string | null;
   connect: () => void;
   disconnect: () => void;
@@ -40,19 +51,49 @@ interface UseWhatsAppReturn {
   getMessages: (chatId: string, limit?: number) => void;
 }
 
-const WHATSAPP_SERVER_URL = 'ws://localhost:3002';
+// Port discovery: try to read from the port file via API, fallback to scanning common ports
+async function discoverWhatsAppPort(): Promise<number | null> {
+  // Try common ports in order
+  const portsToTry = [3042, 3043, 3044, 3045, 3046, 3047, 3048, 3049, 3050];
 
-export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
+  for (const port of portsToTry) {
+    try {
+      const response = await fetch(`http://localhost:${port}/api/port`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(500)
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.port) {
+          console.log(`[WhatsApp] Discovered server on port ${data.port}`);
+          return data.port;
+        }
+      }
+    } catch {
+      // Port not available, try next
+    }
+  }
+  return null;
+}
+
+export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppOptions = {}): UseWhatsAppReturn {
   const [status, setStatus] = useState<WhatsAppStatus>('disconnected');
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [user, setUser] = useState<WhatsAppUser | null>(null);
   const [chats, setChats] = useState<WhatsAppChat[]>([]);
+  const [messages, setMessages] = useState<Map<string, WhatsAppMessage[]>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const optionsRef = useRef(options);
 
-  const connect = useCallback(() => {
+  // Keep options ref updated
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
+  const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
@@ -62,11 +103,18 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
     setQrCode(null);
 
     try {
-      const ws = new WebSocket(`${WHATSAPP_SERVER_URL}?sessionId=${sessionId}`);
+      // Discover the server port dynamically
+      const port = await discoverWhatsAppPort();
+      if (!port) {
+        setStatus('error');
+        setError('WhatsApp server not found. Make sure it is running.');
+        return;
+      }
+
+      const ws = new WebSocket(`ws://localhost:${port}?sessionId=${sessionId}`);
 
       ws.onopen = () => {
         console.log('[WhatsApp] WebSocket connected');
-        // Request initialization
         ws.send(JSON.stringify({ type: 'init' }));
       };
 
@@ -90,6 +138,11 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
               setStatus('ready');
               setUser(data.user);
               setQrCode(null);
+              if (optionsRef.current.onReady) {
+                optionsRef.current.onReady(data.user);
+              }
+              // Auto-fetch chats when ready
+              ws.send(JSON.stringify({ type: 'getChats' }));
               break;
 
             case 'disconnected':
@@ -109,11 +162,47 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
 
             case 'chats':
               setChats(data.chats);
+              if (optionsRef.current.onChatsLoaded) {
+                optionsRef.current.onChatsLoaded(data.chats);
+              }
+              break;
+
+            case 'messages':
+              setMessages(prev => {
+                const newMap = new Map(prev);
+                newMap.set(data.chatId, data.messages);
+                return newMap;
+              });
+              if (optionsRef.current.onMessagesLoaded) {
+                optionsRef.current.onMessagesLoaded(data.chatId, data.messages);
+              }
               break;
 
             case 'message':
-              // Handle incoming message - could emit an event or update state
-              console.log('[WhatsApp] New message:', data.message);
+              // New incoming message
+              const msg: WhatsAppMessage = {
+                id: data.message.id,
+                chatId: data.message.from,
+                body: data.message.body,
+                fromMe: data.message.fromMe,
+                timestamp: data.message.timestamp,
+                contactName: data.message.contactName,
+                contactId: data.message.from.replace('@c.us', ''),
+                hasMedia: data.message.hasMedia,
+                type: data.message.type
+              };
+
+              // Add to messages state
+              setMessages(prev => {
+                const newMap = new Map(prev);
+                const chatMessages = newMap.get(msg.chatId) || [];
+                newMap.set(msg.chatId, [...chatMessages, msg]);
+                return newMap;
+              });
+
+              if (optionsRef.current.onMessage) {
+                optionsRef.current.onMessage(msg);
+              }
               break;
           }
         } catch (e) {
@@ -129,9 +218,7 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
 
       ws.onclose = () => {
         console.log('[WhatsApp] WebSocket closed');
-        if (status !== 'disconnected') {
-          setStatus('disconnected');
-        }
+        setStatus('disconnected');
       };
 
       wsRef.current = ws;
@@ -139,7 +226,7 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
       setStatus('error');
       setError('Failed to connect to WhatsApp server');
     }
-  }, [sessionId, status]);
+  }, [sessionId]);
 
   const disconnect = useCallback(() => {
     if (wsRef.current) {
@@ -151,6 +238,7 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
     setUser(null);
     setQrCode(null);
     setChats([]);
+    setMessages(new Map());
   }, []);
 
   const sendMessage = useCallback((to: string, body: string) => {
@@ -193,6 +281,7 @@ export function useWhatsApp(sessionId: string = 'default'): UseWhatsAppReturn {
     qrCode,
     user,
     chats,
+    messages,
     error,
     connect,
     disconnect,

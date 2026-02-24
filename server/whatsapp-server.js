@@ -81,24 +81,37 @@ function createWhatsAppClient(sessionId) {
   client.on('message', async (message) => {
     console.log(`[${sessionId}] New message from ${message.from}`);
 
-    const contact = await message.getContact();
-    const chat = await message.getChat();
+    try {
+      const contact = await message.getContact();
+      let chatName = message.from;
 
-    broadcastToSession(sessionId, {
-      type: 'message',
-      message: {
-        id: message.id.id,
-        from: message.from,
-        to: message.to,
-        body: message.body,
-        timestamp: message.timestamp,
-        fromMe: message.fromMe,
-        contactName: contact.pushname || contact.name || message.from,
-        chatName: chat.name || contact.pushname || message.from,
-        hasMedia: message.hasMedia,
-        type: message.type
+      // Try to get chat, but handle Channel errors gracefully
+      try {
+        const chat = await message.getChat();
+        chatName = chat.name || contact.pushname || message.from;
+      } catch (chatErr) {
+        console.log(`[${sessionId}] Could not get chat info (possibly a Channel):`, chatErr.message);
+        chatName = contact.pushname || contact.name || message.from;
       }
-    });
+
+      broadcastToSession(sessionId, {
+        type: 'message',
+        message: {
+          id: message.id.id,
+          from: message.from,
+          to: message.to,
+          body: message.body,
+          timestamp: message.timestamp,
+          fromMe: message.fromMe,
+          contactName: contact.pushname || contact.name || message.from,
+          chatName: chatName,
+          hasMedia: message.hasMedia,
+          type: message.type
+        }
+      });
+    } catch (err) {
+      console.error(`[${sessionId}] Error processing message:`, err.message);
+    }
   });
 
   clients.set(sessionId, client);
@@ -153,17 +166,29 @@ wss.on('connection', (ws, req) => {
           const chatsClient = clients.get(sessionId);
           if (chatsClient) {
             const chats = await chatsClient.getChats();
-            const chatList = await Promise.all(chats.slice(0, 50).map(async (chat) => {
-              const contact = await chat.getContact();
-              return {
-                id: chat.id._serialized,
-                name: chat.name || contact.pushname || contact.name || chat.id.user,
-                isGroup: chat.isGroup,
-                unreadCount: chat.unreadCount,
-                lastMessage: chat.lastMessage?.body,
-                timestamp: chat.lastMessage?.timestamp
-              };
-            }));
+            const chatList = [];
+
+            for (const chat of chats.slice(0, 50)) {
+              try {
+                // Skip Channels (they cause errors in whatsapp-web.js)
+                if (chat.id._serialized.includes('@newsletter')) {
+                  continue;
+                }
+
+                const contact = await chat.getContact();
+                chatList.push({
+                  id: chat.id._serialized,
+                  name: chat.name || contact?.pushname || contact?.name || chat.id.user,
+                  isGroup: chat.isGroup,
+                  unreadCount: chat.unreadCount,
+                  lastMessage: chat.lastMessage?.body,
+                  timestamp: chat.lastMessage?.timestamp
+                });
+              } catch (err) {
+                console.log(`[${sessionId}] Skipping chat ${chat.id._serialized}:`, err.message);
+              }
+            }
+
             broadcastToSession(sessionId, { type: 'chats', chats: chatList });
           }
           break;
@@ -172,21 +197,34 @@ wss.on('connection', (ws, req) => {
           // Get messages for a chat
           const messagesClient = clients.get(sessionId);
           if (messagesClient) {
-            const chat = await messagesClient.getChatById(msg.chatId);
-            const messages = await chat.fetchMessages({ limit: msg.limit || 50 });
-            const messageList = await Promise.all(messages.map(async (m) => {
-              const contact = await m.getContact();
-              return {
-                id: m.id.id,
-                body: m.body,
-                fromMe: m.fromMe,
-                timestamp: m.timestamp,
-                contactName: contact.pushname || contact.name || m.from,
-                hasMedia: m.hasMedia,
-                type: m.type
-              };
-            }));
-            broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: messageList });
+            try {
+              const chat = await messagesClient.getChatById(msg.chatId);
+              const messages = await chat.fetchMessages({ limit: msg.limit || 50 });
+              const messageList = [];
+
+              for (const m of messages) {
+                try {
+                  const contact = await m.getContact();
+                  messageList.push({
+                    id: m.id.id,
+                    body: m.body,
+                    fromMe: m.fromMe,
+                    timestamp: m.timestamp,
+                    contactName: contact?.pushname || contact?.name || m.from,
+                    hasMedia: m.hasMedia,
+                    type: m.type
+                  });
+                } catch (err) {
+                  // Skip messages that fail to process
+                  console.log(`[${sessionId}] Skipping message:`, err.message);
+                }
+              }
+
+              broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: messageList });
+            } catch (err) {
+              console.error(`[${sessionId}] Error fetching messages:`, err.message);
+              broadcastToSession(sessionId, { type: 'error', message: 'Could not fetch messages for this chat' });
+            }
           }
           break;
 
@@ -241,8 +279,32 @@ app.get('/api/sessions', (req, res) => {
   res.json(sessions);
 });
 
-const PORT = process.env.WHATSAPP_PORT || 3002;
-server.listen(PORT, () => {
-  console.log(`WhatsApp server running on http://localhost:${PORT}`);
-  console.log(`WebSocket available at ws://localhost:${PORT}`);
+// Port discovery endpoint
+app.get('/api/port', (req, res) => {
+  res.json({ port: server.address().port });
 });
+
+// Try ports starting from preferred, find first available
+const PREFERRED_PORT = parseInt(process.env.WHATSAPP_PORT) || 3042;
+const MAX_PORT_ATTEMPTS = 10;
+
+function tryListen(port, attempt = 0) {
+  if (attempt >= MAX_PORT_ATTEMPTS) {
+    console.error('Could not find an available port after', MAX_PORT_ATTEMPTS, 'attempts');
+    process.exit(1);
+  }
+
+  server.listen(port, () => {
+    console.log(`WhatsApp server running on http://localhost:${port}`);
+    console.log(`WebSocket available at ws://localhost:${port}`);
+  }).on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${port} in use, trying ${port + 1}...`);
+      tryListen(port + 1, attempt + 1);
+    } else {
+      throw err;
+    }
+  });
+}
+
+tryListen(PREFERRED_PORT);

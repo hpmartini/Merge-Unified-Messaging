@@ -1,21 +1,29 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Moon, Sun, Smartphone, Plus, Check, Mail, ArrowLeft, Loader2, Lock, Shield, QrCode, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { Platform, PlatformConfig } from '../types';
+import { Platform } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
-import { useWhatsApp } from '../hooks/useWhatsApp';
 
 // Platforms that use QR code pairing instead of credentials
 const QR_CODE_PLATFORMS = [Platform.WhatsApp, Platform.WhatsAppBusiness];
-// Note: Signal and Telegram would need their own server implementations
+
+// Type for the whatsapp hook return
+interface WhatsAppHook {
+  status: 'disconnected' | 'connecting' | 'qr' | 'authenticated' | 'ready' | 'error';
+  qrCode: string | null;
+  user: { id: string; name: string; phone: string } | null;
+  error: string | null;
+  connect: () => void;
+  disconnect: () => void;
+}
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentTheme: string;
   onSetTheme: (theme: 'dark' | 'dimmed' | 'light') => void;
-  onWhatsAppConnected?: (user: { id: string; name: string; phone: string }) => void;
+  whatsapp: WhatsAppHook;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -23,7 +31,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   currentTheme,
   onSetTheme,
-  onWhatsAppConnected
+  whatsapp
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'accounts'>('general');
   const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
@@ -38,16 +46,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [credentialValues, setCredentialValues] = useState({ identifier: '', secret: '' });
 
-  // WhatsApp real connection
-  const whatsapp = useWhatsApp('merge-app');
-
   // Sync WhatsApp connection status
   useEffect(() => {
     if (whatsapp.status === 'ready' && whatsapp.user) {
       setConnectedAccounts(prev => ({ ...prev, [Platform.WhatsApp]: true }));
-      if (onWhatsAppConnected) {
-        onWhatsAppConnected(whatsapp.user);
-      }
       // Return to list after successful connection
       if (addAccountStep === 'qr' && selectedPlatformToAdd === Platform.WhatsApp) {
         setTimeout(() => {
@@ -58,7 +60,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     } else if (whatsapp.status === 'disconnected') {
       setConnectedAccounts(prev => ({ ...prev, [Platform.WhatsApp]: false }));
     }
-  }, [whatsapp.status, whatsapp.user, addAccountStep, selectedPlatformToAdd, onWhatsAppConnected]);
+  }, [whatsapp.status, whatsapp.user, addAccountStep, selectedPlatformToAdd]);
 
   if (!isOpen) return null;
 
