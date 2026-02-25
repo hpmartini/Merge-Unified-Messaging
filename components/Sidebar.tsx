@@ -94,7 +94,21 @@ const Sidebar: React.FC<SidebarProps> = ({
                         : 'hover:bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-transparent'
                     }`}
                   >
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${
+                    {user.avatarUrl ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name}
+                        className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${
+                          selectedUser.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
+                        }`}
+                        onError={(e) => {
+                          // Fallback to initials on error
+                          e.currentTarget.style.display = 'none';
+                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${user.avatarUrl ? 'hidden' : ''} ${
                        selectedUser.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
                     }`}>
                       {user.avatarInitials}
@@ -162,9 +176,17 @@ const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-theme-base flex items-center justify-center text-[10px] font-bold text-theme-main border border-theme">
-                              {user?.avatarInitials}
-                            </div>
+                            {user?.avatarUrl ? (
+                              <img
+                                src={user.avatarUrl}
+                                alt={user.name}
+                                className="w-6 h-6 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-theme-base flex items-center justify-center text-[10px] font-bold text-theme-main border border-theme">
+                                {user?.avatarInitials}
+                              </div>
+                            )}
                             <span className="text-xs font-bold text-theme-main group-hover:text-blue-400 transition-colors">
                               {user?.name}
                             </span>

@@ -53,23 +53,45 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // We need a ref to access serverPort in the callback
+  const serverPortRef = useRef<number | null>(null);
+
   const handleWhatsAppChatsLoaded = useCallback((chats: WhatsAppChat[]) => {
     // Convert WhatsApp chats to Users
     const waUsers: User[] = chats
       .filter(chat => !chat.isGroup) // Only individual chats for now
-      .map(chat => ({
-        id: `wa-${chat.id.replace('@c.us', '')}`,
-        name: chat.name,
-        avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
-        activePlatforms: [Platform.WhatsApp],
-        role: 'WhatsApp Contact'
-      }));
+      .map(chat => {
+        // Construct avatar URL if available
+        let avatarUrl: string | undefined;
+        if (chat.avatarUrl && serverPortRef.current) {
+          avatarUrl = `http://localhost:${serverPortRef.current}${chat.avatarUrl}`;
+        }
+
+        return {
+          id: `wa-${chat.id.replace('@c.us', '')}`,
+          name: chat.name,
+          avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+          avatarUrl,
+          activePlatforms: [Platform.WhatsApp],
+          role: 'WhatsApp Contact'
+        };
+      });
 
     setUsers(prev => {
-      // Merge with existing users, avoid duplicates
+      // Merge with existing users, update avatar URLs for existing ones
       const existingIds = new Set(prev.map(u => u.id));
       const newUsers = waUsers.filter(u => !existingIds.has(u.id));
-      return [...prev, ...newUsers];
+
+      // Update avatars for existing WhatsApp users
+      const updatedPrev = prev.map(u => {
+        const waUser = waUsers.find(wa => wa.id === u.id);
+        if (waUser && waUser.avatarUrl && !u.avatarUrl) {
+          return { ...u, avatarUrl: waUser.avatarUrl };
+        }
+        return u;
+      });
+
+      return [...updatedPrev, ...newUsers];
     });
   }, []);
 
@@ -99,6 +121,11 @@ const App: React.FC = () => {
     onChatsLoaded: handleWhatsAppChatsLoaded,
     onMessagesLoaded: handleWhatsAppMessagesLoaded,
   });
+
+  // Keep server port ref updated for avatar URLs
+  useEffect(() => {
+    serverPortRef.current = whatsapp.serverPort;
+  }, [whatsapp.serverPort]);
 
   // Auto-connect to WhatsApp on app startup (if session exists, it will reconnect)
   useEffect(() => {

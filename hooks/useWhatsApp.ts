@@ -13,7 +13,7 @@ export interface WhatsAppChat {
   unreadCount: number;
   lastMessage?: string;
   timestamp?: number;
-  profilePicUrl?: string;
+  avatarUrl?: string;
 }
 
 export interface WhatsAppMessage {
@@ -44,11 +44,13 @@ interface UseWhatsAppReturn {
   chats: WhatsAppChat[];
   messages: Map<string, WhatsAppMessage[]>;
   error: string | null;
+  serverPort: number | null;
   connect: () => void;
   disconnect: () => void;
   sendMessage: (to: string, body: string) => void;
   getChats: () => void;
   getMessages: (chatId: string, limit?: number) => void;
+  getCachedData: () => void;
 }
 
 // Port discovery: try to read from the port file via API, fallback to scanning common ports
@@ -83,6 +85,7 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
   const [chats, setChats] = useState<WhatsAppChat[]>([]);
   const [messages, setMessages] = useState<Map<string, WhatsAppMessage[]>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  const [serverPort, setServerPort] = useState<number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -111,10 +114,14 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
         return;
       }
 
+      setServerPort(port);
       const ws = new WebSocket(`ws://localhost:${port}?sessionId=${sessionId}`);
 
       ws.onopen = () => {
         console.log('[WhatsApp] WebSocket connected');
+        // First request cached data for instant display
+        ws.send(JSON.stringify({ type: 'getCachedData' }));
+        // Then initialize WhatsApp client
         ws.send(JSON.stringify({ type: 'init' }));
       };
 
@@ -161,16 +168,37 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
               break;
 
             case 'chats':
-              setChats(data.chats);
+              // Merge with existing chats (cached vs fresh)
+              setChats(prev => {
+                if (data.cached && prev.length > 0) {
+                  // Don't replace fresh data with cached
+                  return prev;
+                }
+                return data.chats;
+              });
               if (optionsRef.current.onChatsLoaded) {
                 optionsRef.current.onChatsLoaded(data.chats);
               }
               break;
 
+            case 'cachedDataLoaded':
+              console.log('[WhatsApp] Cached data loaded');
+              break;
+
             case 'messages':
               setMessages(prev => {
                 const newMap = new Map(prev);
-                newMap.set(data.chatId, data.messages);
+                const existing = newMap.get(data.chatId) || [];
+
+                // If cached and we already have fresh data, skip
+                if (data.cached && existing.length > 0) {
+                  return prev;
+                }
+
+                // Merge messages, avoiding duplicates
+                const existingIds = new Set(existing.map(m => m.id));
+                const newMessages = data.messages.filter((m: WhatsAppMessage) => !existingIds.has(m.id));
+                newMap.set(data.chatId, [...existing, ...newMessages]);
                 return newMap;
               });
               if (optionsRef.current.onMessagesLoaded) {
@@ -264,6 +292,12 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
     }
   }, []);
 
+  const getCachedData = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'getCachedData' }));
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -283,10 +317,12 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
     chats,
     messages,
     error,
+    serverPort,
     connect,
     disconnect,
     sendMessage,
     getChats,
-    getMessages
+    getMessages,
+    getCachedData
   };
 }

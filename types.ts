@@ -19,6 +19,7 @@ export interface User {
   id: string;
   name: string;
   avatarInitials: string;
+  avatarUrl?: string; // URL to profile picture
   activePlatforms: Platform[];
   role?: string; // e.g., "Frontend Dev", "PM"
 }

@@ -26,3 +26,6 @@ dist-ssr
 # WhatsApp session data (contains auth tokens - DO NOT COMMIT)
 .wwebjs_auth/
 .wwebjs_cache/
+
+# WhatsApp data cache (messages, avatars - personal data)
+server/data/

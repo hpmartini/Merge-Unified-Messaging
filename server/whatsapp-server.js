@@ -4,10 +4,24 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = join(__dirname, 'data');
+const AVATARS_DIR = join(DATA_DIR, 'avatars');
+
+// Ensure data directories exist
+if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
+if (!existsSync(AVATARS_DIR)) mkdirSync(AVATARS_DIR, { recursive: true });
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Serve avatars statically
+app.use('/avatars', express.static(AVATARS_DIR));
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
@@ -15,6 +29,92 @@ const wss = new WebSocketServer({ server });
 // Store active WhatsApp clients per session
 const clients = new Map();
 const wsConnections = new Map();
+
+// ============ DATA PERSISTENCE ============
+
+function getDataPath(sessionId, type) {
+  return join(DATA_DIR, `${sessionId}_${type}.json`);
+}
+
+function loadData(sessionId, type) {
+  const path = getDataPath(sessionId, type);
+  if (existsSync(path)) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8'));
+    } catch (e) {
+      console.error(`Failed to load ${type} for ${sessionId}:`, e.message);
+    }
+  }
+  return type === 'messages' ? {} : [];
+}
+
+function saveData(sessionId, type, data) {
+  const path = getDataPath(sessionId, type);
+  try {
+    writeFileSync(path, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error(`Failed to save ${type} for ${sessionId}:`, e.message);
+  }
+}
+
+function saveMessage(sessionId, chatId, message) {
+  const messages = loadData(sessionId, 'messages');
+  if (!messages[chatId]) messages[chatId] = [];
+
+  // Avoid duplicates
+  if (!messages[chatId].find(m => m.id === message.id)) {
+    messages[chatId].push(message);
+    saveData(sessionId, 'messages', messages);
+  }
+}
+
+function saveChat(sessionId, chat) {
+  const chats = loadData(sessionId, 'chats');
+  const idx = chats.findIndex(c => c.id === chat.id);
+  if (idx >= 0) {
+    chats[idx] = { ...chats[idx], ...chat };
+  } else {
+    chats.push(chat);
+  }
+  saveData(sessionId, 'chats', chats);
+}
+
+// ============ AVATAR HANDLING ============
+
+function getAvatarFilename(contactId) {
+  // Sanitize the contact ID for filename
+  return contactId.replace(/[^a-zA-Z0-9]/g, '_') + '.jpg';
+}
+
+async function downloadAvatar(client, contactId, sessionId) {
+  try {
+    const filename = getAvatarFilename(contactId);
+    const filepath = join(AVATARS_DIR, filename);
+
+    // Skip if already downloaded
+    if (existsSync(filepath)) {
+      return `/avatars/${filename}`;
+    }
+
+    const contact = await client.getContactById(contactId);
+    const picUrl = await contact.getProfilePicUrl();
+
+    if (picUrl) {
+      // Fetch the image
+      const response = await fetch(picUrl);
+      if (response.ok) {
+        const buffer = Buffer.from(await response.arrayBuffer());
+        writeFileSync(filepath, buffer);
+        console.log(`[${sessionId}] Downloaded avatar for ${contactId}`);
+        return `/avatars/${filename}`;
+      }
+    }
+  } catch (err) {
+    // Profile pic not available or private
+    console.log(`[${sessionId}] Could not get avatar for ${contactId}:`, err.message);
+  }
+  return null;
+}
 
 // Broadcast to specific session
 function broadcastToSession(sessionId, data) {
@@ -94,21 +194,26 @@ function createWhatsAppClient(sessionId) {
         chatName = contact.pushname || contact.name || message.from;
       }
 
-      broadcastToSession(sessionId, {
-        type: 'message',
-        message: {
-          id: message.id.id,
-          from: message.from,
-          to: message.to,
-          body: message.body,
-          timestamp: message.timestamp,
-          fromMe: message.fromMe,
-          contactName: contact.pushname || contact.name || message.from,
-          chatName: chatName,
-          hasMedia: message.hasMedia,
-          type: message.type
-        }
-      });
+      const msgData = {
+        id: message.id.id,
+        from: message.from,
+        to: message.to,
+        body: message.body,
+        timestamp: message.timestamp,
+        fromMe: message.fromMe,
+        contactName: contact.pushname || contact.name || message.from,
+        chatName: chatName,
+        hasMedia: message.hasMedia,
+        type: message.type
+      };
+
+      // Save message to disk
+      saveMessage(sessionId, message.from, msgData);
+
+      // Download avatar in background
+      downloadAvatar(client, message.from, sessionId);
+
+      broadcastToSession(sessionId, { type: 'message', message: msgData });
     } catch (err) {
       console.error(`[${sessionId}] Error processing message:`, err.message);
     }
@@ -165,6 +270,14 @@ wss.on('connection', (ws, req) => {
           // Get all chats
           const chatsClient = clients.get(sessionId);
           if (chatsClient) {
+            // First send cached chats immediately
+            const cachedChats = loadData(sessionId, 'chats');
+            if (cachedChats.length > 0) {
+              console.log(`[${sessionId}] Sending ${cachedChats.length} cached chats`);
+              broadcastToSession(sessionId, { type: 'chats', chats: cachedChats, cached: true });
+            }
+
+            // Then fetch fresh chats from WhatsApp
             const chats = await chatsClient.getChats();
             const chatList = [];
 
@@ -176,26 +289,45 @@ wss.on('connection', (ws, req) => {
                 }
 
                 const contact = await chat.getContact();
-                chatList.push({
+
+                // Download avatar in background
+                const avatarUrl = await downloadAvatar(chatsClient, chat.id._serialized, sessionId);
+
+                const chatData = {
                   id: chat.id._serialized,
                   name: chat.name || contact?.pushname || contact?.name || chat.id.user,
                   isGroup: chat.isGroup,
                   unreadCount: chat.unreadCount,
                   lastMessage: chat.lastMessage?.body,
-                  timestamp: chat.lastMessage?.timestamp
-                });
+                  timestamp: chat.lastMessage?.timestamp,
+                  avatarUrl: avatarUrl
+                };
+
+                chatList.push(chatData);
+
+                // Save chat to disk
+                saveChat(sessionId, chatData);
               } catch (err) {
                 console.log(`[${sessionId}] Skipping chat ${chat.id._serialized}:`, err.message);
               }
             }
 
-            broadcastToSession(sessionId, { type: 'chats', chats: chatList });
+            broadcastToSession(sessionId, { type: 'chats', chats: chatList, cached: false });
           }
           break;
 
         case 'getMessages':
           // Get messages for a chat
           const messagesClient = clients.get(sessionId);
+
+          // First send cached messages immediately
+          const allCachedMessages = loadData(sessionId, 'messages');
+          const cachedMessages = allCachedMessages[msg.chatId] || [];
+          if (cachedMessages.length > 0) {
+            console.log(`[${sessionId}] Sending ${cachedMessages.length} cached messages for ${msg.chatId}`);
+            broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: cachedMessages, cached: true });
+          }
+
           if (messagesClient) {
             try {
               const chat = await messagesClient.getChatById(msg.chatId);
@@ -205,7 +337,7 @@ wss.on('connection', (ws, req) => {
               for (const m of messages) {
                 try {
                   const contact = await m.getContact();
-                  messageList.push({
+                  const msgData = {
                     id: m.id.id,
                     body: m.body,
                     fromMe: m.fromMe,
@@ -213,19 +345,50 @@ wss.on('connection', (ws, req) => {
                     contactName: contact?.pushname || contact?.name || m.from,
                     hasMedia: m.hasMedia,
                     type: m.type
-                  });
+                  };
+                  messageList.push(msgData);
+
+                  // Save message to disk
+                  saveMessage(sessionId, msg.chatId, msgData);
                 } catch (err) {
                   // Skip messages that fail to process
                   console.log(`[${sessionId}] Skipping message:`, err.message);
                 }
               }
 
-              broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: messageList });
+              broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: messageList, cached: false });
             } catch (err) {
               console.error(`[${sessionId}] Error fetching messages:`, err.message);
-              broadcastToSession(sessionId, { type: 'error', message: 'Could not fetch messages for this chat' });
+              // If we already sent cached messages, don't send error
+              if (cachedMessages.length === 0) {
+                broadcastToSession(sessionId, { type: 'error', message: 'Could not fetch messages for this chat' });
+              }
             }
           }
+          break;
+
+        case 'getCachedData':
+          // Send cached data immediately (for offline/startup)
+          const cachedChatsData = loadData(sessionId, 'chats');
+          const cachedMessagesData = loadData(sessionId, 'messages');
+
+          if (cachedChatsData.length > 0) {
+            broadcastToSession(sessionId, { type: 'chats', chats: cachedChatsData, cached: true });
+          }
+
+          // Send cached messages for each chat
+          for (const chatId of Object.keys(cachedMessagesData)) {
+            if (cachedMessagesData[chatId].length > 0) {
+              broadcastToSession(sessionId, {
+                type: 'messages',
+                chatId: chatId,
+                messages: cachedMessagesData[chatId],
+                cached: true
+              });
+            }
+          }
+
+          broadcastToSession(sessionId, { type: 'cachedDataLoaded' });
           break;
 
         case 'logout':
