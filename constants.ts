@@ -19,68 +19,8 @@ export const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   [Platform.Threema]: { id: Platform.Threema, label: 'Threema', color: 'text-emerald-400', bgColor: 'bg-emerald-400', lineColor: '#34d399' },
 };
 
-// --- Dummy Data ---
+// --- Initial Data (empty - populated from connected services) ---
 
-export const USERS: User[] = [
-  { id: 'u1', name: 'Alice', avatarInitials: 'AL', activePlatforms: [Platform.WhatsApp, Platform.Signal, Platform.Mail, Platform.Slack], role: 'Tech Lead' },
-  { id: 'u2', name: 'Bob', avatarInitials: 'BO', activePlatforms: [Platform.WhatsApp, Platform.Telegram, Platform.SMS, Platform.Teams], role: 'Backend' },
-  { id: 'u3', name: 'Chris', avatarInitials: 'CH', activePlatforms: [Platform.WhatsApp, Platform.Twitter, Platform.Facebook], role: 'Marketing' },
-  { id: 'u4', name: 'Dennis', avatarInitials: 'DE', activePlatforms: [Platform.WhatsApp, Platform.LinkedIn], role: 'Recruiter' },
-  { id: 'u5', name: 'Eddy', avatarInitials: 'ED', activePlatforms: [Platform.WhatsApp, Platform.Instagram, Platform.Threema], role: 'Designer' },
-  { id: 'u6', name: 'Arthur Dent', avatarInitials: 'AD', activePlatforms: [Platform.Mail, Platform.WhatsAppBusiness], role: 'Local Resident' },
-];
+export const USERS: User[] = [];
 
-const generateHash = () => Math.random().toString(16).substring(2, 9);
-const now = new Date();
-const subtractMinutes = (date: Date, minutes: number) => new Date(date.getTime() - minutes * 60000);
-
-export const INITIAL_MESSAGES: Message[] = [
-  // Alice Thread
-  { 
-    id: 'm1', 
-    userId: 'u1', 
-    platform: Platform.Mail, 
-    content: 'Hey team, just pushing the latest architectural diagrams. Please review the attached PDF.', 
-    subject: 'Project Alpha Docs', 
-    timestamp: subtractMinutes(now, 120), 
-    isMe: false, 
-    hash: 'a1b2c3d',
-    attachments: [
-      { id: 'a1', type: 'document', name: 'System_Arch_v2.pdf', size: '2.4 MB', url: '#' }
-    ]
-  },
-  { id: 'm2', userId: 'u1', platform: Platform.WhatsApp, content: 'Did you get the email? The attachment might be large.', timestamp: subtractMinutes(now, 115), isMe: false, hash: 'e5f6g7h', replyToId: 'm1', replyToPlatform: Platform.Mail },
-  { id: 'm3', userId: 'u1', platform: Platform.WhatsApp, content: 'Yep, got it. Reviewing now.', timestamp: subtractMinutes(now, 110), isMe: true, hash: 'i8j9k0l' },
-  { 
-    id: 'm4', 
-    userId: 'u1', 
-    platform: Platform.Signal, 
-    content: 'Lets move to Signal for the security keys discussion. Here is the public key visual.', 
-    timestamp: subtractMinutes(now, 60), 
-    isMe: false, 
-    hash: 'm1n2o3p',
-    attachments: [
-      { id: 'a2', type: 'image', name: 'pub_key_qr.png', size: '450 KB', url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&q=80&w=200&h=200' }
-    ]
-  },
-  { id: 'm5', userId: 'u1', platform: Platform.Signal, content: 'Keys received. Merging to main.', timestamp: subtractMinutes(now, 55), isMe: true, hash: 'q4r5s6t' },
-  
-  // Arthur Thread
-  { id: 'm6', userId: 'u6', platform: Platform.Mail, content: 'This is a bypass announcement. Your house is scheduled for demolition.', subject: 'Re: Bulldozer outside', timestamp: subtractMinutes(now, 300), isMe: false, hash: 'x9y8z7w' },
-  { id: 'm7', userId: 'u6', platform: Platform.WhatsAppBusiness, content: 'Please do not panic. It is a simple bypass.', timestamp: subtractMinutes(now, 290), isMe: false, hash: 'v6u5t4s', replyToId: 'm6', replyToPlatform: Platform.Mail },
-
-  // Bob
-  { id: 'm8', userId: 'u2', platform: Platform.Telegram, content: 'Server is down.', timestamp: subtractMinutes(now, 20), isMe: false, hash: '1234567' },
-  { 
-    id: 'm9', 
-    userId: 'u2', 
-    platform: Platform.SMS, 
-    content: 'Are you online? Internet seems out too. Screenshot of the error:', 
-    timestamp: subtractMinutes(now, 19), 
-    isMe: false, 
-    hash: '7654321',
-    attachments: [
-      { id: 'a3', type: 'image', name: 'error_log_500.jpg', size: '1.1 MB', url: 'https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&q=80&w=200&h=200' }
-    ]
-  },
-];
+export const INITIAL_MESSAGES: Message[] = [];

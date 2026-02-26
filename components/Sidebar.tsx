@@ -6,7 +6,7 @@ import { GitBranch, Search, X, MessageSquare, Clock, Settings } from 'lucide-rea
 
 interface SidebarProps {
   users: User[];
-  selectedUser: User;
+  selectedUser: User | null;
   onSelectUser: (user: User) => void;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -89,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={() => onSelectUser(user)}
                     className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
-                      selectedUser.id === user.id
+                      selectedUser?.id === user.id
                         ? 'bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-blue-500'
                         : 'hover:bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-transparent'
                     }`}
@@ -99,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         src={user.avatarUrl}
                         alt={user.name}
                         className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${
-                          selectedUser.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
+                          selectedUser?.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
                         }`}
                         onError={(e) => {
                           // Fallback to initials on error
@@ -109,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       />
                     ) : null}
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${user.avatarUrl ? 'hidden' : ''} ${
-                       selectedUser.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
+                       selectedUser?.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
                     }`}>
                       {user.avatarInitials}
                     </div>

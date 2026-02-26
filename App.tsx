@@ -18,7 +18,7 @@ import { Share2, Filter, MessagesSquare, FolderOpen, UploadCloud, Search, Chevro
 const App: React.FC = () => {
   // --- State ---
   const [users, setUsers] = useState<User[]>(USERS);
-  const [selectedUser, setSelectedUser] = useState<User>(USERS[0]);
+  const [selectedUser, setSelectedUser] = useState<User | null>(USERS[0] || null);
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [visiblePlatforms, setVisiblePlatforms] = useState<Set<Platform>>(new Set(Object.values(Platform)));
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -138,13 +138,20 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - intentionally not including whatsapp.connect to prevent re-runs
 
+  // Auto-select first user when users are loaded and none selected
+  useEffect(() => {
+    if (!selectedUser && users.length > 0) {
+      setSelectedUser(users[0]);
+    }
+  }, [users, selectedUser]);
+
   // Load messages when selecting a WhatsApp user
   useEffect(() => {
-    if (selectedUser.id.startsWith('wa-') && whatsapp.status === 'ready') {
+    if (selectedUser?.id.startsWith('wa-') && whatsapp.status === 'ready') {
       const chatId = selectedUser.id.replace('wa-', '') + '@c.us';
       whatsapp.getMessages(chatId, 100);
     }
-  }, [selectedUser.id, whatsapp.status]);
+  }, [selectedUser?.id, whatsapp.status]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,10 +184,11 @@ const App: React.FC = () => {
 
   // --- Derived State ---
   const userMessages = useMemo(() => {
+    if (!selectedUser) return [];
     return messages
       .filter(m => m.userId === selectedUser.id)
       .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-  }, [messages, selectedUser.id]);
+  }, [messages, selectedUser]);
 
   const globalSearchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -212,9 +220,10 @@ const App: React.FC = () => {
     if (scrollContainerRef.current && !targetMessageId) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
-  }, [userMessages.length, selectedUser.id, targetMessageId]);
+  }, [userMessages.length, selectedUser?.id, targetMessageId]);
 
   useEffect(() => {
+    if (!selectedUser) return;
     setVisiblePlatforms(new Set(selectedUser.activePlatforms));
     setReplyingTo(null);
     setIsGalleryOpen(false);
@@ -303,6 +312,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleSendMessage = (content: string, platform: Platform, attachments?: Attachment[]) => {
+    if (!selectedUser) return;
+
     const newMessage: Message = {
       id: Date.now().toString(),
       userId: selectedUser.id,
@@ -477,12 +488,27 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* Empty state when no user selected */}
+        {!selectedUser ? (
+          <div className="flex-1 flex flex-col items-center justify-center text-theme-muted">
+            <MessageCircle className="w-16 h-16 mb-4 stroke-1 opacity-50" />
+            <h2 className="text-xl font-bold text-theme-main mb-2">Welcome to Merge</h2>
+            <p className="text-sm mb-4">Connect a messaging service to get started</p>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold transition-colors"
+            >
+              Open Settings
+            </button>
+          </div>
+        ) : (
+        <>
         {/* Top Header */}
         <header className="min-h-14 border-b border-theme bg-theme-panel/50 backdrop-blur flex flex-col justify-center flex-shrink-0 z-10 transition-all">
             <div className="flex items-center px-6 h-14 justify-between w-full">
                 <div className="flex items-center gap-3 flex-1">
                     {/* Mobile Back Button */}
-                    <button 
+                    <button
                         onClick={() => setShowMobileChat(false)}
                         className="md:hidden p-1 -ml-2 mr-2 text-theme-muted hover:text-theme-main rounded-full hover:bg-theme-hover transition-colors"
                     >
@@ -502,9 +528,9 @@ const App: React.FC = () => {
                     ) : (
                     <div className="flex items-center gap-2 bg-theme-base/80 border border-theme rounded-lg px-3 py-1 flex-1 max-w-md animate-in fade-in zoom-in duration-300">
                         <Search className="w-4 h-4 text-blue-500" />
-                        <input 
+                        <input
                             ref={localSearchInputRef}
-                            type="text" 
+                            type="text"
                             value={localSearchQuery}
                             onChange={(e) => { setLocalSearchQuery(e.target.value); setCurrentMatchIndex(0); }}
                             placeholder={`Search in conversation with ${selectedUser.name}...`}
@@ -736,9 +762,9 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <Composer 
-            selectedUser={selectedUser} 
-            onSendMessage={handleSendMessage} 
+          <Composer
+            selectedUser={selectedUser}
+            onSendMessage={handleSendMessage}
             replyingTo={replyingTo}
             onCancelReply={() => setReplyingTo(null)}
             draftAttachments={draftAttachments}
@@ -747,6 +773,8 @@ const App: React.FC = () => {
             isUploading={isUploading}
           />
         </div>
+        </>
+        )}
       </div>
 
       <MediaGallery 
