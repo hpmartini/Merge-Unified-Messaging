@@ -255,100 +255,102 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                       </div>
                   )}
 
-                  {/* Content (Markdown Enabled) */}
-                  <div className={`markdown-content leading-relaxed font-normal ${isMe ? 'text-theme-main' : 'text-theme-main'}`}>
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm]}
-                        components={MarkdownComponents}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
-                  </div>
+                  {/* Content (Markdown Enabled) - only show if there's text content */}
+                  {message.content && (
+                    <div className={`markdown-content leading-relaxed font-normal ${isMe ? 'text-theme-main' : 'text-theme-main'}`}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={MarkdownComponents}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                    </div>
+                  )}
 
-                  {/* Enhanced Inline Attachments Display */}
-                  {attachments.length > 0 && (
-                    <div className="mt-4">
+                  {/* Inline Media - Always visible (images, videos, audio) */}
+                  {(imageAttachments.length > 0 || videoAttachments.length > 0 || audioAttachments.length > 0) && (
+                    <div className={`${message.content ? 'mt-3' : ''} space-y-3`}>
+                      {/* Images Grid */}
+                      {imageAttachments.length > 0 && (
+                        <div className={`grid ${imageAttachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                          {imageAttachments.map(att => (
+                            <div
+                              key={att.id}
+                              className="rounded-md overflow-hidden border border-theme cursor-zoom-in relative group/img shadow-lg bg-theme-base"
+                              onClick={() => onImageClick(att)}
+                            >
+                              <img src={att.url} alt={att.name} className="w-full h-auto object-cover max-h-[300px]" />
+                              <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-colors flex items-center justify-center">
+                                <div className="p-2 bg-slate-900/80 rounded-full border border-white/20 opacity-0 group-hover/img:opacity-100 transition-all scale-75 group-hover/img:scale-100">
+                                  <ZoomIn className="w-5 h-5 text-white" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Videos */}
+                      {videoAttachments.length > 0 && (
+                        <div className="space-y-2">
+                          {videoAttachments.map(att => (
+                            <div key={att.id} className="rounded-md overflow-hidden border border-theme shadow-lg bg-black">
+                              <video
+                                src={att.url}
+                                controls
+                                className="w-full max-h-[300px]"
+                                preload="metadata"
+                              >
+                                Your browser does not support the video tag.
+                              </video>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Audio */}
+                      {audioAttachments.length > 0 && (
+                        <div className="space-y-2">
+                          {audioAttachments.map(att => (
+                            <div key={att.id} className="flex items-center gap-3 p-2 bg-theme-base/60 rounded-md border border-theme">
+                              <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 text-green-500">
+                                <Volume2 className="w-4 h-4" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <audio src={att.url} controls className="w-full h-8" preload="metadata">
+                                  Your browser does not support the audio tag.
+                                </audio>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Documents - collapsible */}
+                  {docAttachments.length > 0 && (
+                    <div className={`${message.content || imageAttachments.length > 0 || videoAttachments.length > 0 || audioAttachments.length > 0 ? 'mt-3' : ''}`}>
                       {/* Attachment Toggle Button */}
-                      <button 
+                      <button
                         onClick={() => setIsExpanded(!isExpanded)}
                         className={`
                           flex items-center gap-2 px-3 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-all
-                          ${isExpanded 
-                            ? 'bg-theme-base border-theme text-theme-main' 
+                          ${isExpanded
+                            ? 'bg-theme-base border-theme text-theme-main'
                             : 'bg-theme-base/40 border-theme text-theme-muted hover:text-theme-main hover:border-slate-500/50'
                           }
                           ${isMe ? 'ml-auto flex-row-reverse' : ''}
                         `}
                       >
                         <Paperclip className="w-3 h-3" />
-                        <span>{isExpanded ? 'Hide' : 'Show'} Attachments ({attachments.length})</span>
+                        <span>{isExpanded ? 'Hide' : 'Show'} Documents ({docAttachments.length})</span>
                         {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                       </button>
 
-                      {/* Expanded Content */}
+                      {/* Expanded Documents */}
                       {isExpanded && (
-                        <div className={`mt-3 space-y-4 animate-in fade-in zoom-in duration-200`}>
-                          {/* Images Grid */}
-                          {imageAttachments.length > 0 && (
-                            <div className={`grid ${imageAttachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-                              {imageAttachments.map(att => (
-                                <div
-                                  key={att.id}
-                                  className="rounded-md overflow-hidden border border-theme cursor-zoom-in relative group/img shadow-xl bg-theme-base"
-                                  onClick={() => onImageClick(att)}
-                                >
-                                  <img src={att.url} alt={att.name} className="w-full h-auto object-cover max-h-[240px]" />
-                                  <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-colors flex items-center justify-center">
-                                    <div className="p-2 bg-slate-900/80 rounded-full border border-white/20 opacity-0 group-hover/img:opacity-100 transition-all scale-75 group-hover/img:scale-100">
-                                      <ZoomIn className="w-5 h-5 text-white" />
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Videos */}
-                          {videoAttachments.length > 0 && (
-                            <div className="space-y-2">
-                              {videoAttachments.map(att => (
-                                <div key={att.id} className="rounded-md overflow-hidden border border-theme shadow-xl bg-black">
-                                  <video
-                                    src={att.url}
-                                    controls
-                                    className="w-full max-h-[300px]"
-                                    preload="metadata"
-                                  >
-                                    Your browser does not support the video tag.
-                                  </video>
-                                  <div className="flex items-center gap-2 p-2 bg-theme-base/80 text-xs text-theme-muted">
-                                    <Play className="w-3 h-3" />
-                                    <span className="truncate">{att.name}</span>
-                                    <span className="ml-auto">{att.size}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-
-                          {/* Audio */}
-                          {audioAttachments.length > 0 && (
-                            <div className="space-y-2">
-                              {audioAttachments.map(att => (
-                                <div key={att.id} className="flex items-center gap-3 p-3 bg-theme-base/60 rounded-md border border-theme">
-                                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 text-green-500">
-                                    <Volume2 className="w-5 h-5" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <audio src={att.url} controls className="w-full h-8" preload="metadata">
-                                      Your browser does not support the audio tag.
-                                    </audio>
-                                    <div className="text-[9px] text-theme-muted mt-1">{att.name} • {att.size}</div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                        <div className="mt-3 space-y-2 animate-in fade-in zoom-in duration-200">
 
                           {/* Documents List */}
                           {docAttachments.length > 0 && (
