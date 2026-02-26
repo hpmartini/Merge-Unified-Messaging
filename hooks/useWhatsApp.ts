@@ -195,23 +195,29 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
               break;
 
             case 'messages':
+              console.log('[WhatsApp] Received messages - chatId:', data.chatId, 'count:', data.messages?.length, 'cached:', data.cached);
               setMessages(prev => {
                 const newMap = new Map(prev);
                 const existing = newMap.get(data.chatId) || [];
 
                 // If cached and we already have fresh data, skip
                 if (data.cached && existing.length > 0) {
+                  console.log('[WhatsApp] Skipping cached messages, already have fresh data');
                   return prev;
                 }
 
                 // Merge messages, avoiding duplicates
                 const existingIds = new Set(existing.map(m => m.id));
                 const newMessages = data.messages.filter((m: WhatsAppMessage) => !existingIds.has(m.id));
+                console.log('[WhatsApp] Adding', newMessages.length, 'new messages to state');
                 newMap.set(data.chatId, [...existing, ...newMessages]);
                 return newMap;
               });
               if (optionsRef.current.onMessagesLoaded) {
+                console.log('[WhatsApp] Calling onMessagesLoaded callback');
                 optionsRef.current.onMessagesLoaded(data.chatId, data.messages);
+              } else {
+                console.log('[WhatsApp] No onMessagesLoaded callback!');
               }
               break;
 
@@ -297,8 +303,11 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
   }, []);
 
   const getMessages = useCallback((chatId: string, limit: number = 50) => {
+    console.log('[WhatsApp] getMessages called - chatId:', chatId, 'wsReady:', wsRef.current?.readyState === WebSocket.OPEN);
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'getMessages', chatId, limit }));
+    } else {
+      console.log('[WhatsApp] getMessages - WebSocket not ready!');
     }
   }, []);
 

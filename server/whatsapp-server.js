@@ -64,8 +64,15 @@ function saveMessage(sessionId, chatId, message) {
   const messages = loadData(sessionId, 'messages');
   if (!messages[chatId]) messages[chatId] = [];
 
-  // Avoid duplicates
-  if (!messages[chatId].find(m => m.id === message.id)) {
+  const existingIdx = messages[chatId].findIndex(m => m.id === message.id);
+  if (existingIdx >= 0) {
+    // Update existing message if new one has media that old one lacks
+    const existing = messages[chatId][existingIdx];
+    if (message.media && !existing.media) {
+      messages[chatId][existingIdx] = { ...existing, media: message.media };
+      saveData(sessionId, 'messages', messages);
+    }
+  } else {
     messages[chatId].push(message);
     saveData(sessionId, 'messages', messages);
   }
@@ -122,6 +129,9 @@ async function downloadAvatar(client, contactId, sessionId) {
 // ============ MEDIA HANDLING ============
 
 function getMediaExtension(mimetype) {
+  // Strip codec info (e.g., 'audio/ogg; codecs=opus' -> 'audio/ogg')
+  const baseMime = mimetype.split(';')[0].trim();
+
   const mimeMap = {
     'image/jpeg': '.jpg',
     'image/png': '.png',
@@ -138,13 +148,14 @@ function getMediaExtension(mimetype) {
     'application/msword': '.doc',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
   };
-  return mimeMap[mimetype] || '';
+  return mimeMap[baseMime] || '';
 }
 
 function getMediaType(mimetype) {
-  if (mimetype.startsWith('image/')) return 'image';
-  if (mimetype.startsWith('video/')) return 'video';
-  if (mimetype.startsWith('audio/')) return 'audio';
+  const baseMime = mimetype.split(';')[0].trim();
+  if (baseMime.startsWith('image/')) return 'image';
+  if (baseMime.startsWith('video/')) return 'video';
+  if (baseMime.startsWith('audio/')) return 'audio';
   return 'document';
 }
 
@@ -397,6 +408,7 @@ wss.on('connection', (ws, req) => {
 
         case 'getMessages':
           // Get messages for a chat
+          console.log(`[${sessionId}] getMessages request for chatId: ${msg.chatId}`);
           const messagesClient = clients.get(sessionId);
 
           // First send cached messages immediately
@@ -405,12 +417,16 @@ wss.on('connection', (ws, req) => {
           if (cachedMessages.length > 0) {
             console.log(`[${sessionId}] Sending ${cachedMessages.length} cached messages for ${msg.chatId}`);
             broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: cachedMessages, cached: true });
+          } else {
+            console.log(`[${sessionId}] No cached messages for ${msg.chatId}`);
           }
 
           if (messagesClient) {
+            console.log(`[${sessionId}] Fetching fresh messages from WhatsApp for ${msg.chatId}...`);
             try {
               const chat = await messagesClient.getChatById(msg.chatId);
               const messages = await chat.fetchMessages({ limit: msg.limit || 50 });
+              console.log(`[${sessionId}] Fetched ${messages.length} messages from WhatsApp`);
               const messageList = [];
 
               for (const m of messages) {
@@ -443,14 +459,17 @@ wss.on('connection', (ws, req) => {
                 }
               }
 
+              console.log(`[${sessionId}] Sending ${messageList.length} fresh messages to frontend`);
               broadcastToSession(sessionId, { type: 'messages', chatId: msg.chatId, messages: messageList, cached: false });
             } catch (err) {
-              console.error(`[${sessionId}] Error fetching messages:`, err.message);
+              console.error(`[${sessionId}] Error fetching messages:`, err.message, err.stack);
               // If we already sent cached messages, don't send error
               if (cachedMessages.length === 0) {
                 broadcastToSession(sessionId, { type: 'error', message: 'Could not fetch messages for this chat' });
               }
             }
+          } else {
+            console.log(`[${sessionId}] No WhatsApp client available for getMessages`);
           }
           break;
 

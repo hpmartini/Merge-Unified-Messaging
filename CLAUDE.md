@@ -10,7 +10,7 @@ Merge is a unified messaging interface built with React 19 and TypeScript. It di
 
 ```bash
 npm install      # Install dependencies
-npm run dev      # Start dev server on http://localhost:3000
+npm run dev      # Start dev server on http://localhost:3001
 npm run build    # Production build
 npm run preview  # Preview production build
 ```
@@ -23,7 +23,7 @@ Set `GEMINI_API_KEY` in `.env.local` for AI summarization features.
 
 ### Stack
 - **React 19** with TypeScript
-- **Vite** for bundling (dev server on port 3000)
+- **Vite** for bundling (dev server on port 3001)
 - **Tailwind CSS** via CDN (configured in `index.html`)
 - **Google GenAI SDK** for conversation summarization
 

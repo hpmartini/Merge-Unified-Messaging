@@ -112,7 +112,9 @@ const App: React.FC = () => {
   }, []);
 
   const handleWhatsAppMessagesLoaded = useCallback((chatId: string, waMessages: WhatsAppMessage[]) => {
+    console.log('[App] handleWhatsAppMessagesLoaded - chatId:', chatId, 'count:', waMessages.length, 'sample:', waMessages[0]);
     const userId = `wa-${chatId.replace('@c.us', '')}`;
+    console.log('[App] Constructed userId:', userId);
 
     const newMessages: Message[] = waMessages.map(waMsg => {
       // Convert media to attachment format
@@ -146,6 +148,7 @@ const App: React.FC = () => {
       // Filter out duplicates
       const existingIds = new Set(prev.map(m => m.id));
       const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      console.log('[App] setMessages - prev count:', prev.length, 'new unique:', uniqueNew.length);
       return [...prev, ...uniqueNew];
     });
   }, []);
@@ -181,11 +184,13 @@ const App: React.FC = () => {
 
   // Load messages when selecting a WhatsApp user
   useEffect(() => {
+    console.log('[App] Load messages effect - selectedUser:', selectedUser?.id, 'status:', whatsapp.status);
     if (selectedUser?.id.startsWith('wa-') && whatsapp.status === 'ready') {
       const chatId = selectedUser.id.replace('wa-', '') + '@c.us';
+      console.log('[App] Requesting messages for chatId:', chatId);
       whatsapp.getMessages(chatId, 100);
     }
-  }, [selectedUser?.id, whatsapp.status]);
+  }, [selectedUser?.id, whatsapp.status, whatsapp.getMessages]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -219,9 +224,9 @@ const App: React.FC = () => {
   // --- Derived State ---
   const userMessages = useMemo(() => {
     if (!selectedUser) return [];
-    return messages
-      .filter(m => m.userId === selectedUser.id)
-      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    const filtered = messages.filter(m => m.userId === selectedUser.id);
+    console.log('[App] userMessages - total messages:', messages.length, 'selectedUser.id:', selectedUser.id, 'filtered:', filtered.length);
+    return filtered.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }, [messages, selectedUser]);
 
   const globalSearchResults = useMemo(() => {
