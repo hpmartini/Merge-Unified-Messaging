@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, Platform, User, Attachment } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
-import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye } from 'lucide-react';
+import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2 } from 'lucide-react';
 
 interface GraphNodeProps {
   message: Message;
@@ -82,8 +82,10 @@ const GraphNode: React.FC<GraphNodeProps> = ({
   }
 
   const attachments = message.attachments || [];
-  const imageAttachments = attachments.filter(a => a.type === 'image');
-  const docAttachments = attachments.filter(a => a.type === 'document');
+  const imageAttachments = attachments.filter(a => a.type === 'image' && a.mediaType !== 'video');
+  const videoAttachments = attachments.filter(a => a.mediaType === 'video');
+  const audioAttachments = attachments.filter(a => a.mediaType === 'audio');
+  const docAttachments = attachments.filter(a => a.type === 'document' && a.mediaType !== 'audio');
 
   // Markdown rendering customization to support search highlighting
   const MarkdownComponents = {
@@ -290,7 +292,7 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                           {imageAttachments.length > 0 && (
                             <div className={`grid ${imageAttachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
                               {imageAttachments.map(att => (
-                                <div 
+                                <div
                                   key={att.id}
                                   className="rounded-md overflow-hidden border border-theme cursor-zoom-in relative group/img shadow-xl bg-theme-base"
                                   onClick={() => onImageClick(att)}
@@ -300,6 +302,48 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                                     <div className="p-2 bg-slate-900/80 rounded-full border border-white/20 opacity-0 group-hover/img:opacity-100 transition-all scale-75 group-hover/img:scale-100">
                                       <ZoomIn className="w-5 h-5 text-white" />
                                     </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Videos */}
+                          {videoAttachments.length > 0 && (
+                            <div className="space-y-2">
+                              {videoAttachments.map(att => (
+                                <div key={att.id} className="rounded-md overflow-hidden border border-theme shadow-xl bg-black">
+                                  <video
+                                    src={att.url}
+                                    controls
+                                    className="w-full max-h-[300px]"
+                                    preload="metadata"
+                                  >
+                                    Your browser does not support the video tag.
+                                  </video>
+                                  <div className="flex items-center gap-2 p-2 bg-theme-base/80 text-xs text-theme-muted">
+                                    <Play className="w-3 h-3" />
+                                    <span className="truncate">{att.name}</span>
+                                    <span className="ml-auto">{att.size}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Audio */}
+                          {audioAttachments.length > 0 && (
+                            <div className="space-y-2">
+                              {audioAttachments.map(att => (
+                                <div key={att.id} className="flex items-center gap-3 p-3 bg-theme-base/60 rounded-md border border-theme">
+                                  <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 text-green-500">
+                                    <Volume2 className="w-5 h-5" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <audio src={att.url} controls className="w-full h-8" preload="metadata">
+                                      Your browser does not support the audio tag.
+                                    </audio>
+                                    <div className="text-[9px] text-theme-muted mt-1">{att.name} • {att.size}</div>
                                   </div>
                                 </div>
                               ))}

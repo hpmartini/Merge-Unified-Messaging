@@ -35,6 +35,21 @@ const App: React.FC = () => {
 
   // WhatsApp Integration
   const handleWhatsAppMessage = useCallback((waMsg: WhatsAppMessage) => {
+    // Convert media to attachment format
+    let attachments: Attachment[] = [];
+    if (waMsg.media && serverPortRef.current) {
+      const mediaUrl = `http://localhost:${serverPortRef.current}${waMsg.media.url}`;
+      attachments = [{
+        id: waMsg.id,
+        type: waMsg.media.type === 'image' || waMsg.media.type === 'video' ? 'image' : 'document',
+        name: waMsg.media.filename,
+        url: mediaUrl,
+        size: waMsg.media.filesize ? `${(waMsg.media.filesize / 1024).toFixed(1)} KB` : '',
+        mimetype: waMsg.media.mimetype,
+        mediaType: waMsg.media.type
+      }];
+    }
+
     // Convert WhatsApp message to app Message format
     const newMessage: Message = {
       id: `wa-${waMsg.id}`,
@@ -44,6 +59,7 @@ const App: React.FC = () => {
       timestamp: new Date(waMsg.timestamp * 1000),
       isMe: waMsg.fromMe,
       hash: waMsg.id.substring(0, 7),
+      attachments
     };
 
     setMessages(prev => {
@@ -98,15 +114,33 @@ const App: React.FC = () => {
   const handleWhatsAppMessagesLoaded = useCallback((chatId: string, waMessages: WhatsAppMessage[]) => {
     const userId = `wa-${chatId.replace('@c.us', '')}`;
 
-    const newMessages: Message[] = waMessages.map(waMsg => ({
-      id: `wa-${waMsg.id}`,
-      userId: userId,
-      platform: Platform.WhatsApp,
-      content: waMsg.body,
-      timestamp: new Date(waMsg.timestamp * 1000),
-      isMe: waMsg.fromMe,
-      hash: waMsg.id.substring(0, 7),
-    }));
+    const newMessages: Message[] = waMessages.map(waMsg => {
+      // Convert media to attachment format
+      let attachments: Attachment[] = [];
+      if (waMsg.media && serverPortRef.current) {
+        const mediaUrl = `http://localhost:${serverPortRef.current}${waMsg.media.url}`;
+        attachments = [{
+          id: waMsg.id,
+          type: waMsg.media.type === 'image' || waMsg.media.type === 'video' ? 'image' : 'document',
+          name: waMsg.media.filename,
+          url: mediaUrl,
+          size: waMsg.media.filesize ? `${(waMsg.media.filesize / 1024).toFixed(1)} KB` : '',
+          mimetype: waMsg.media.mimetype,
+          mediaType: waMsg.media.type
+        }];
+      }
+
+      return {
+        id: `wa-${waMsg.id}`,
+        userId: userId,
+        platform: Platform.WhatsApp,
+        content: waMsg.body,
+        timestamp: new Date(waMsg.timestamp * 1000),
+        isMe: waMsg.fromMe,
+        hash: waMsg.id.substring(0, 7),
+        attachments
+      };
+    });
 
     setMessages(prev => {
       // Filter out duplicates

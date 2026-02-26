@@ -11,17 +11,20 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
 const AVATARS_DIR = join(DATA_DIR, 'avatars');
+const MEDIA_DIR = join(DATA_DIR, 'media');
 
 // Ensure data directories exist
 if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 if (!existsSync(AVATARS_DIR)) mkdirSync(AVATARS_DIR, { recursive: true });
+if (!existsSync(MEDIA_DIR)) mkdirSync(MEDIA_DIR, { recursive: true });
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve avatars statically
+// Serve avatars and media statically
 app.use('/avatars', express.static(AVATARS_DIR));
+app.use('/media', express.static(MEDIA_DIR));
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
@@ -116,6 +119,75 @@ async function downloadAvatar(client, contactId, sessionId) {
   return null;
 }
 
+// ============ MEDIA HANDLING ============
+
+function getMediaExtension(mimetype) {
+  const mimeMap = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'video/mp4': '.mp4',
+    'video/3gpp': '.3gp',
+    'video/quicktime': '.mov',
+    'audio/ogg': '.ogg',
+    'audio/mpeg': '.mp3',
+    'audio/mp4': '.m4a',
+    'audio/aac': '.aac',
+    'application/pdf': '.pdf',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  };
+  return mimeMap[mimetype] || '';
+}
+
+function getMediaType(mimetype) {
+  if (mimetype.startsWith('image/')) return 'image';
+  if (mimetype.startsWith('video/')) return 'video';
+  if (mimetype.startsWith('audio/')) return 'audio';
+  return 'document';
+}
+
+async function downloadMedia(message, sessionId) {
+  try {
+    if (!message.hasMedia) return null;
+
+    const media = await message.downloadMedia();
+    if (!media) return null;
+
+    const ext = getMediaExtension(media.mimetype);
+    const filename = `${message.id.id}${ext}`;
+    const filepath = join(MEDIA_DIR, filename);
+
+    // Skip if already downloaded
+    if (existsSync(filepath)) {
+      return {
+        url: `/media/${filename}`,
+        mimetype: media.mimetype,
+        type: getMediaType(media.mimetype),
+        filename: media.filename || filename,
+        filesize: media.filesize
+      };
+    }
+
+    // Save media to disk
+    const buffer = Buffer.from(media.data, 'base64');
+    writeFileSync(filepath, buffer);
+    console.log(`[${sessionId}] Downloaded media: ${filename} (${media.mimetype})`);
+
+    return {
+      url: `/media/${filename}`,
+      mimetype: media.mimetype,
+      type: getMediaType(media.mimetype),
+      filename: media.filename || filename,
+      filesize: buffer.length
+    };
+  } catch (err) {
+    console.error(`[${sessionId}] Failed to download media:`, err.message);
+    return null;
+  }
+}
+
 // Broadcast to specific session
 function broadcastToSession(sessionId, data) {
   const ws = wsConnections.get(sessionId);
@@ -194,6 +266,12 @@ function createWhatsAppClient(sessionId) {
         chatName = contact.pushname || contact.name || message.from;
       }
 
+      // Download media if present
+      let media = null;
+      if (message.hasMedia) {
+        media = await downloadMedia(message, sessionId);
+      }
+
       const msgData = {
         id: message.id.id,
         from: message.from,
@@ -204,7 +282,8 @@ function createWhatsAppClient(sessionId) {
         contactName: contact.pushname || contact.name || message.from,
         chatName: chatName,
         hasMedia: message.hasMedia,
-        type: message.type
+        type: message.type,
+        media: media
       };
 
       // Save message to disk
@@ -337,6 +416,13 @@ wss.on('connection', (ws, req) => {
               for (const m of messages) {
                 try {
                   const contact = await m.getContact();
+
+                  // Download media if present
+                  let media = null;
+                  if (m.hasMedia) {
+                    media = await downloadMedia(m, sessionId);
+                  }
+
                   const msgData = {
                     id: m.id.id,
                     body: m.body,
@@ -344,7 +430,8 @@ wss.on('connection', (ws, req) => {
                     timestamp: m.timestamp,
                     contactName: contact?.pushname || contact?.name || m.from,
                     hasMedia: m.hasMedia,
-                    type: m.type
+                    type: m.type,
+                    media: media
                   };
                   messageList.push(msgData);
 

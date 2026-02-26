@@ -30,6 +30,8 @@ export interface Attachment {
   url: string;
   name: string;
   size: string;
+  mimetype?: string;
+  mediaType?: 'image' | 'video' | 'audio' | 'document';
 }
 
 export interface Message {

@@ -16,6 +16,14 @@ export interface WhatsAppChat {
   avatarUrl?: string;
 }
 
+export interface WhatsAppMedia {
+  url: string;
+  mimetype: string;
+  type: 'image' | 'video' | 'audio' | 'document';
+  filename: string;
+  filesize?: number;
+}
+
 export interface WhatsAppMessage {
   id: string;
   chatId: string;
@@ -26,6 +34,7 @@ export interface WhatsAppMessage {
   contactId: string;
   hasMedia: boolean;
   type: string;
+  media?: WhatsAppMedia | null;
 }
 
 export type WhatsAppStatus = 'disconnected' | 'connecting' | 'qr' | 'authenticated' | 'ready' | 'error';
@@ -217,7 +226,8 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
                 contactName: data.message.contactName,
                 contactId: data.message.from.replace('@c.us', ''),
                 hasMedia: data.message.hasMedia,
-                type: data.message.type
+                type: data.message.type,
+                media: data.message.media
               };
 
               // Add to messages state
