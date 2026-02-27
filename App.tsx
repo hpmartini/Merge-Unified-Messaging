@@ -255,11 +255,22 @@ const App: React.FC = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Scroll to bottom when messages change or user switches
   useEffect(() => {
     if (scrollContainerRef.current && !targetMessageId) {
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      // Use setTimeout to ensure DOM is fully updated after React render
+      const timeoutId = setTimeout(() => {
+        if (scrollContainerRef.current) {
+          // Use scrollTo with instant behavior to bypass CSS scroll-smooth
+          scrollContainerRef.current.scrollTo({
+            top: scrollContainerRef.current.scrollHeight,
+            behavior: 'instant'
+          });
+        }
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
-  }, [userMessages.length, selectedUser?.id, targetMessageId]);
+  }, [userMessages, selectedUser?.id, targetMessageId]);
 
   useEffect(() => {
     if (!selectedUser) return;
@@ -785,9 +796,9 @@ const App: React.FC = () => {
               </div>
             ) : (
               userMessages.map(msg => (
-                <GraphNode 
-                  key={msg.id} 
-                  message={msg} 
+                <GraphNode
+                  key={msg.id}
+                  message={msg}
                   activePlatforms={selectedUser.activePlatforms}
                   visiblePlatforms={visiblePlatforms}
                   onReply={setReplyingTo}
@@ -796,6 +807,7 @@ const App: React.FC = () => {
                   onDocView={handleDocumentAction}
                   isTargeted={targetMessageId === msg.id}
                   searchTerm={isLocalSearchOpen ? localSearchQuery : searchQuery}
+                  singleChannel={selectedUser.activePlatforms.length === 1}
                 />
               ))
             )}

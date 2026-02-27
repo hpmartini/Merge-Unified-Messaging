@@ -17,18 +17,20 @@ interface GraphNodeProps {
   onDocView?: (attachment: Attachment) => void;
   isTargeted?: boolean;
   searchTerm?: string;
+  singleChannel?: boolean; // Hide rails/dots when only one channel
 }
 
-const GraphNode: React.FC<GraphNodeProps> = ({ 
-  message, 
-  activePlatforms, 
-  visiblePlatforms, 
-  onReply, 
-  user, 
+const GraphNode: React.FC<GraphNodeProps> = ({
+  message,
+  activePlatforms,
+  visiblePlatforms,
+  onReply,
+  user,
   onImageClick,
   onDocView,
   isTargeted,
-  searchTerm
+  searchTerm,
+  singleChannel = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
@@ -113,66 +115,70 @@ const GraphNode: React.FC<GraphNodeProps> = ({
       className={`flex group relative w-full hover:bg-theme-hover transition-all min-h-[80px] ${isTargeted ? 'bg-blue-600/5' : ''}`}
     >
       
-      {/* 1. Rails Area */}
-      <div 
-        className="relative flex-shrink-0" 
-        style={{ width: `${activePlatforms.length * RAIL_WIDTH + LEFT_PADDING}px` }}
-      >
-        {/* Connector Line */}
-        <div 
-            className="absolute h-px bg-slate-500/20"
-            style={{ 
-                top: `${TOP_OFFSET}px`,
-                left: `${railX}px`, 
-                right: 0,
-            }}
-        />
-
-        {/* Vertical Rails */}
-        {activePlatforms.map((platform, idx) => {
-          if (!visiblePlatforms.has(platform)) return null;
-          return (
-            <div
-              key={platform}
-              className="absolute top-0 bottom-0 border-l border-dashed opacity-20"
-              style={{
-                left: `${LEFT_PADDING + (idx * RAIL_WIDTH) + (RAIL_WIDTH/2)}px`,
-                borderColor: PLATFORM_CONFIG[platform].lineColor,
-                borderWidth: '1px'
-              }}
-            />
-          );
-        })}
-
-        {/* Merge Path */}
-        {mergePath && (
-           <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible">
-             {mergePath}
-           </svg>
-        )}
-
-        {/* The Commit Dot */}
-        <div 
-           className={`absolute -translate-y-1/2 z-10 transition-all ${isTargeted ? 'scale-150' : 'group-hover:scale-110'}`}
-           style={{ 
-             left: `${railX - 5}px`,
-             top: `${TOP_OFFSET}px` 
-            }}
+      {/* 1. Rails Area - hidden when only one channel */}
+      {!singleChannel && (
+        <div
+          className="relative flex-shrink-0"
+          style={{ width: `${activePlatforms.length * RAIL_WIDTH + LEFT_PADDING}px` }}
         >
-          <div 
-            className={`w-2.5 h-2.5 rounded-full ${config.bgColor} ring-4 ring-theme-base shadow-sm ${isTargeted ? 'animate-pulse ring-blue-500/50' : ''}`}
+          {/* Connector Line */}
+          <div
+            className="absolute h-px bg-slate-500/20"
+            style={{
+              top: `${TOP_OFFSET}px`,
+              left: `${railX}px`,
+              right: 0,
+            }}
           />
+
+          {/* Vertical Rails */}
+          {activePlatforms.map((platform, idx) => {
+            if (!visiblePlatforms.has(platform)) return null;
+            return (
+              <div
+                key={platform}
+                className="absolute top-0 bottom-0 border-l border-dashed opacity-20"
+                style={{
+                  left: `${LEFT_PADDING + (idx * RAIL_WIDTH) + (RAIL_WIDTH/2)}px`,
+                  borderColor: PLATFORM_CONFIG[platform].lineColor,
+                  borderWidth: '1px'
+                }}
+              />
+            );
+          })}
+
+          {/* Merge Path */}
+          {mergePath && (
+            <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible">
+              {mergePath}
+            </svg>
+          )}
+
+          {/* The Commit Dot */}
+          <div
+            className={`absolute -translate-y-1/2 z-10 transition-all ${isTargeted ? 'scale-150' : 'group-hover:scale-110'}`}
+            style={{
+              left: `${railX - 5}px`,
+              top: `${TOP_OFFSET}px`
+            }}
+          >
+            <div
+              className={`w-2.5 h-2.5 rounded-full ${config.bgColor} ring-4 ring-theme-base shadow-sm ${isTargeted ? 'animate-pulse ring-blue-500/50' : ''}`}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 2. Message Content Area - Adjusted padding for mobile */}
       <div className={`flex-1 min-w-0 px-2 md:pl-4 md:pr-6 py-2 flex relative ${isMe ? 'justify-end' : 'justify-start'}`}>
-        
-        {/* Horizontal Guide Line */}
-        <div 
-            className="absolute left-0 right-0 h-px bg-slate-500/10 -z-10" 
+
+        {/* Horizontal Guide Line - hidden when only one channel */}
+        {!singleChannel && (
+          <div
+            className="absolute left-0 right-0 h-px bg-slate-500/10 -z-10"
             style={{ top: `${TOP_OFFSET}px` }}
-        />
+          />
+        )}
 
         {/* Adjusted Gap and Max Width for Mobile */}
         <div className={`flex gap-2 md:gap-3 max-w-[95%] md:max-w-[75%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
