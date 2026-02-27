@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { Message, Platform, User, Attachment } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
 import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2 } from 'lucide-react';
+import AudioWaveform from './AudioWaveform';
 
 interface GraphNodeProps {
   message: Message;
@@ -308,20 +309,11 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                         </div>
                       )}
 
-                      {/* Audio */}
+                      {/* Audio with Waveform */}
                       {audioAttachments.length > 0 && (
                         <div className="space-y-2">
                           {audioAttachments.map(att => (
-                            <div key={att.id} className="flex items-center gap-3 p-3 bg-theme-base/60 rounded-lg border border-theme min-w-[280px]">
-                              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 text-green-500">
-                                <Volume2 className="w-5 h-5" />
-                              </div>
-                              <div className="flex-1" style={{ minWidth: '200px' }}>
-                                <audio src={att.url} controls className="w-full h-10" preload="metadata">
-                                  Your browser does not support the audio tag.
-                                </audio>
-                              </div>
-                            </div>
+                            <AudioWaveform key={att.id} src={att.url} isMe={isMe} />
                           ))}
                         </div>
                       )}
