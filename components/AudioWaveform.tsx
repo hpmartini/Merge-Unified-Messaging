@@ -6,15 +6,17 @@ interface AudioWaveformProps {
   isMe?: boolean;
 }
 
+// Available playback speeds
+const PLAYBACK_SPEEDS = [1, 1.2, 1.5, 2, 2.5, 3];
+
 const AudioWaveform: React.FC<AudioWaveformProps> = ({ src, isMe = false }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>();
 
   // Number of bars in the waveform
   const BAR_COUNT = 50;
@@ -66,10 +68,18 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ src, isMe = false }) => {
     analyzeAudio();
   }, [src]);
 
+  // Update playback rate when speed changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  }, [playbackSpeed]);
+
   // Handle audio metadata loaded
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
+      audioRef.current.playbackRate = playbackSpeed;
     }
   };
 
@@ -101,6 +111,13 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ src, isMe = false }) => {
     }
   }, [isPlaying]);
 
+  // Cycle through playback speeds
+  const cycleSpeed = useCallback(() => {
+    const currentIndex = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+    const nextIndex = (currentIndex + 1) % PLAYBACK_SPEEDS.length;
+    setPlaybackSpeed(PLAYBACK_SPEEDS[nextIndex]);
+  }, [playbackSpeed]);
+
   // Handle click on waveform to seek
   const handleWaveformClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (audioRef.current && duration > 0) {
@@ -120,6 +137,11 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ src, isMe = false }) => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Format speed for display
+  const formatSpeed = (speed: number): string => {
+    return speed === 1 ? '1x' : `${speed}x`;
+  };
+
   // Calculate progress percentage
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
@@ -130,7 +152,7 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ src, isMe = false }) => {
   const buttonBg = isMe ? 'bg-green-500' : 'bg-green-500';
 
   return (
-    <div className={`flex items-center gap-3 p-3 ${bgColor} rounded-2xl min-w-[280px] max-w-[320px]`}>
+    <div className={`flex items-center gap-3 p-3 ${bgColor} rounded-2xl min-w-[280px] max-w-[350px]`}>
       {/* Hidden audio element */}
       <audio
         ref={audioRef}
@@ -191,16 +213,33 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ src, isMe = false }) => {
           )}
         </div>
 
-        {/* Time display */}
+        {/* Time and Speed display */}
         <div className="flex justify-between items-center mt-1">
           <span className={`text-xs ${isMe ? 'text-green-100/70' : 'text-theme-muted'}`}>
             {formatTime(currentTime > 0 ? currentTime : duration)}
           </span>
-          {duration > 0 && currentTime > 0 && (
-            <span className={`text-xs ${isMe ? 'text-green-100/50' : 'text-theme-muted/50'}`}>
-              {formatTime(duration)}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {duration > 0 && currentTime > 0 && (
+              <span className={`text-xs ${isMe ? 'text-green-100/50' : 'text-theme-muted/50'}`}>
+                {formatTime(duration)}
+              </span>
+            )}
+            {/* Speed Button */}
+            <button
+              onClick={cycleSpeed}
+              className={`
+                px-2 py-0.5 rounded-full text-[10px] font-bold
+                ${isMe
+                  ? 'bg-green-500/30 text-green-100 hover:bg-green-500/50'
+                  : 'bg-slate-600/50 text-slate-300 hover:bg-slate-600/70'
+                }
+                transition-colors
+              `}
+              title="Change playback speed"
+            >
+              {formatSpeed(playbackSpeed)}
+            </button>
+          </div>
         </div>
       </div>
     </div>
