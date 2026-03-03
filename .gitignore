@@ -29,3 +29,9 @@ dist-ssr
 
 # WhatsApp data cache (messages, avatars - personal data)
 server/data/
+
+# Signal-cli binary and dependencies (download separately)
+server/signal-cli/
+
+# Signal session data (contains auth tokens - DO NOT COMMIT)
+server/signal-config/
