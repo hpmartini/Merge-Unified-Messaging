@@ -9,7 +9,8 @@
     "whatsapp": "node server/whatsapp-server.js",
     "signal": "node server/signal-server.js",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node scripts/install-signal-cli.js"
   },
   "dependencies": {
     "@google/genai": "latest",
