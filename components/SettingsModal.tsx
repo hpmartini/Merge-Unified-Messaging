@@ -6,7 +6,7 @@ import { Platform } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
 
 // Platforms that use QR code pairing instead of credentials
-const QR_CODE_PLATFORMS = [Platform.WhatsApp, Platform.WhatsAppBusiness];
+const QR_CODE_PLATFORMS = [Platform.WhatsApp, Platform.WhatsAppBusiness, Platform.Signal];
 
 // Type for the whatsapp hook return
 interface WhatsAppHook {
@@ -18,12 +18,24 @@ interface WhatsAppHook {
   disconnect: () => void;
 }
 
+// Type for the signal hook return
+interface SignalHook {
+  status: 'disconnected' | 'connecting' | 'need_setup' | 'linking' | 'verification_needed' | 'ready' | 'error';
+  linkUri: string | null;
+  user: { id: string; name: string; phone: string } | null;
+  error: string | null;
+  connect: (phoneNumber?: string) => void;
+  disconnect: () => void;
+  startLink: () => void;
+}
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentTheme: string;
   onSetTheme: (theme: 'dark' | 'dimmed' | 'light') => void;
   whatsapp: WhatsAppHook;
+  signal: SignalHook;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -31,7 +43,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   currentTheme,
   onSetTheme,
-  whatsapp
+  whatsapp,
+  signal
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'accounts'>('general');
   const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
@@ -62,6 +75,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [whatsapp.status, whatsapp.user, addAccountStep, selectedPlatformToAdd]);
 
+  // Sync Signal connection status
+  useEffect(() => {
+    if (signal.status === 'ready' && signal.user) {
+      setConnectedAccounts(prev => ({ ...prev, [Platform.Signal]: true }));
+      // Return to list after successful connection
+      if (addAccountStep === 'qr' && selectedPlatformToAdd === Platform.Signal) {
+        setTimeout(() => {
+          setAddAccountStep('list');
+          setSelectedPlatformToAdd(null);
+        }, 1500);
+      }
+    } else if (signal.status === 'disconnected') {
+      setConnectedAccounts(prev => ({ ...prev, [Platform.Signal]: false }));
+    }
+  }, [signal.status, signal.user, addAccountStep, selectedPlatformToAdd]);
+
   if (!isOpen) return null;
 
   // Group platforms for cleaner UI
@@ -90,6 +119,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       if (p === Platform.WhatsApp || p === Platform.WhatsAppBusiness) {
         whatsapp.connect();
       }
+      // Start Signal device linking
+      if (p === Platform.Signal) {
+        signal.connect();
+        // Give it a moment to connect, then start linking
+        setTimeout(() => signal.startLink(), 500);
+      }
     } else {
       setAddAccountStep('form');
       setCredentialValues({ identifier: '', secret: '' });
@@ -103,6 +138,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       // Disconnect WhatsApp if we're backing out
       if (whatsapp.status !== 'disconnected' && whatsapp.status !== 'ready') {
         whatsapp.disconnect();
+      }
+      // Disconnect Signal if we're backing out
+      if (signal.status !== 'disconnected' && signal.status !== 'ready') {
+        signal.disconnect();
       }
     } else if (addAccountStep === 'select') {
       setAddAccountStep('list');
@@ -174,6 +213,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     if (!selectedPlatformToAdd) return null;
     const config = PLATFORM_CONFIG[selectedPlatformToAdd];
     const isWhatsApp = selectedPlatformToAdd === Platform.WhatsApp || selectedPlatformToAdd === Platform.WhatsAppBusiness;
+    const isSignal = selectedPlatformToAdd === Platform.Signal;
 
     return (
       <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
@@ -192,7 +232,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex-1 flex flex-col items-center justify-center max-w-md mx-auto w-full">
           {/* QR Code Container */}
           <div className={`relative bg-white p-4 rounded-2xl shadow-2xl mb-6 transition-all`}>
-            {/* Loading / Connecting state */}
+            {/* Loading / Connecting state - WhatsApp */}
             {(whatsapp.status === 'connecting' || whatsapp.status === 'disconnected') && isWhatsApp && (
               <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-12 h-12 text-gray-400 animate-spin" />
@@ -212,7 +252,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* Authenticated - waiting for ready */}
+            {/* Authenticated - waiting for ready - WhatsApp */}
             {whatsapp.status === 'authenticated' && isWhatsApp && (
               <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
                 <Loader2 className="w-12 h-12 text-green-500 animate-spin" />
@@ -220,7 +260,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* Connected */}
+            {/* Connected - WhatsApp */}
             {whatsapp.status === 'ready' && isWhatsApp && (
               <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
                 <CheckCircle2 className="w-16 h-16 text-green-500" />
@@ -231,7 +271,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             )}
 
-            {/* Error state */}
+            {/* Error state - WhatsApp */}
             {whatsapp.status === 'error' && isWhatsApp && (
               <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
                 <AlertCircle className="w-12 h-12 text-red-500" />
@@ -239,15 +279,67 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span className="text-xs text-gray-500 text-center px-4">{whatsapp.error}</span>
               </div>
             )}
+
+            {/* Signal States */}
+            {/* Loading / Connecting state - Signal */}
+            {(signal.status === 'connecting' || signal.status === 'need_setup') && isSignal && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
+                <span className="text-sm text-gray-500">Preparing Signal link...</span>
+              </div>
+            )}
+
+            {/* QR Code from Signal */}
+            {signal.status === 'linking' && signal.linkUri && isSignal && (
+              <div className="w-64 h-64">
+                <QRCodeSVG
+                  value={signal.linkUri}
+                  size={256}
+                  level="M"
+                  marginSize={0}
+                />
+              </div>
+            )}
+
+            {/* Linking without QR yet - Signal */}
+            {signal.status === 'linking' && !signal.linkUri && isSignal && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-12 h-12 text-blue-400 animate-spin" />
+                <span className="text-sm text-gray-500">Generating QR code...</span>
+              </div>
+            )}
+
+            {/* Connected - Signal */}
+            {signal.status === 'ready' && isSignal && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <CheckCircle2 className="w-16 h-16 text-blue-500" />
+                <span className="text-sm font-bold text-blue-600">Connected!</span>
+                {signal.user && (
+                  <span className="text-xs text-gray-500">{signal.user.phone}</span>
+                )}
+              </div>
+            )}
+
+            {/* Error state - Signal */}
+            {signal.status === 'error' && isSignal && (
+              <div className="w-48 h-48 flex flex-col items-center justify-center gap-3">
+                <AlertCircle className="w-12 h-12 text-red-500" />
+                <span className="text-sm font-bold text-red-500">Connection Error</span>
+                <span className="text-xs text-gray-500 text-center px-4">{signal.error}</span>
+              </div>
+            )}
           </div>
 
           {/* Instructions */}
           <div className="text-center space-y-4">
             <h4 className="text-lg font-bold text-theme-main">
-              {whatsapp.status === 'ready' ? 'Successfully Connected!' : `Scan with ${config.label}`}
+              {(whatsapp.status === 'ready' && isWhatsApp) || (signal.status === 'ready' && isSignal)
+                ? 'Successfully Connected!'
+                : `Scan with ${config.label}`}
             </h4>
 
-            {whatsapp.status === 'qr' && (
+            {/* WhatsApp QR instructions */}
+            {whatsapp.status === 'qr' && isWhatsApp && (
               <ol className="text-sm text-theme-muted space-y-2 text-left">
                 <li className="flex items-start gap-2">
                   <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
@@ -264,7 +356,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </ol>
             )}
 
-            {whatsapp.status === 'error' && (
+            {/* Signal QR instructions */}
+            {signal.status === 'linking' && isSignal && (
+              <ol className="text-sm text-theme-muted space-y-2 text-left">
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>
+                  <span>Open Signal on your phone</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>
+                  <span>Go to Settings → Linked Devices</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="w-5 h-5 rounded-full bg-theme-hover flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>
+                  <span>Tap "+" or "Link New Device" and scan this code</span>
+                </li>
+              </ol>
+            )}
+
+            {whatsapp.status === 'error' && isWhatsApp && (
               <button
                 onClick={() => whatsapp.connect()}
                 className="flex items-center gap-2 mx-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
@@ -274,12 +384,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             )}
 
-            {/* Server hint */}
-            {(whatsapp.status === 'error' || whatsapp.status === 'connecting') && (
+            {signal.status === 'error' && isSignal && (
+              <button
+                onClick={() => signal.startLink()}
+                className="flex items-center gap-2 mx-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </button>
+            )}
+
+            {/* Server hint - WhatsApp */}
+            {(whatsapp.status === 'error' || whatsapp.status === 'connecting') && isWhatsApp && (
               <p className="text-xs text-theme-muted opacity-75 mt-4 max-w-xs">
                 Make sure the WhatsApp server is running:<br />
                 <code className="bg-theme-base px-2 py-1 rounded text-[10px] block mt-1">
                   node server/whatsapp-server.js
+                </code>
+              </p>
+            )}
+
+            {/* Server hint - Signal */}
+            {(signal.status === 'error' || signal.status === 'connecting') && isSignal && (
+              <p className="text-xs text-theme-muted opacity-75 mt-4 max-w-xs">
+                Make sure the Signal server is running:<br />
+                <code className="bg-theme-base px-2 py-1 rounded text-[10px] block mt-1">
+                  node server/signal-server.js
                 </code>
               </p>
             )}
@@ -289,7 +419,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="mt-6 p-3 bg-green-500/10 border border-green-500/20 rounded-lg flex items-start gap-3 max-w-sm">
             <Shield className="w-5 h-5 text-green-400 flex-shrink-0" />
             <p className="text-xs text-green-300/90 leading-relaxed">
-              Your messages stay end-to-end encrypted. Merge syncs via WhatsApp Web protocol.
+              Your messages stay end-to-end encrypted. Merge syncs via {isSignal ? 'Signal protocol' : 'WhatsApp Web protocol'}.
             </p>
           </div>
         </div>

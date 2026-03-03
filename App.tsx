@@ -10,6 +10,7 @@ import SettingsModal from './components/SettingsModal';
 import { USERS, INITIAL_MESSAGES, PLATFORM_CONFIG } from './constants';
 import { User, Message, Platform, Attachment } from './types';
 import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp';
+import { useSignal, SignalChat, SignalMessage } from './hooks/useSignal';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GoogleGenAI } from "@google/genai";
@@ -164,6 +165,123 @@ const App: React.FC = () => {
     serverPortRef.current = whatsapp.serverPort;
   }, [whatsapp.serverPort]);
 
+  // Signal Integration
+  const signalServerPortRef = useRef<number | null>(null);
+
+  const handleSignalMessage = useCallback((sigMsg: SignalMessage) => {
+    let attachments: Attachment[] = [];
+    if (sigMsg.media && signalServerPortRef.current) {
+      const mediaUrl = `http://localhost:${signalServerPortRef.current}${sigMsg.media.url}`;
+      attachments = [{
+        id: sigMsg.id,
+        type: sigMsg.media.type === 'image' || sigMsg.media.type === 'video' ? 'image' : 'document',
+        name: sigMsg.media.filename,
+        url: mediaUrl,
+        size: sigMsg.media.filesize ? `${(sigMsg.media.filesize / 1024).toFixed(1)} KB` : '',
+        mimetype: sigMsg.media.mimetype,
+        mediaType: sigMsg.media.type
+      }];
+    }
+
+    const newMessage: Message = {
+      id: `sig-${sigMsg.id}`,
+      userId: `sig-${sigMsg.contactId}`,
+      platform: Platform.Signal,
+      content: sigMsg.body,
+      timestamp: new Date(sigMsg.timestamp * 1000),
+      isMe: sigMsg.fromMe,
+      hash: sigMsg.id.substring(0, 7),
+      attachments
+    };
+
+    setMessages(prev => {
+      if (prev.find(m => m.id === newMessage.id)) return prev;
+      return [...prev, newMessage];
+    });
+  }, []);
+
+  const handleSignalChatsLoaded = useCallback((chats: SignalChat[]) => {
+    const sigUsers: User[] = chats
+      .filter(chat => !chat.isGroup)
+      .map(chat => {
+        let avatarUrl: string | undefined;
+        if (chat.avatarUrl && signalServerPortRef.current) {
+          avatarUrl = `http://localhost:${signalServerPortRef.current}${chat.avatarUrl}`;
+        }
+
+        return {
+          id: `sig-${chat.id}`,
+          name: chat.name,
+          avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+          avatarUrl,
+          activePlatforms: [Platform.Signal],
+          role: 'Signal Contact'
+        };
+      });
+
+    setUsers(prev => {
+      const existingIds = new Set(prev.map(u => u.id));
+      const newUsers = sigUsers.filter(u => !existingIds.has(u.id));
+
+      const updatedPrev = prev.map(u => {
+        const sigUser = sigUsers.find(sig => sig.id === u.id);
+        if (sigUser && sigUser.avatarUrl && !u.avatarUrl) {
+          return { ...u, avatarUrl: sigUser.avatarUrl };
+        }
+        return u;
+      });
+
+      return [...updatedPrev, ...newUsers];
+    });
+  }, []);
+
+  const handleSignalMessagesLoaded = useCallback((chatId: string, sigMessages: SignalMessage[]) => {
+    const userId = `sig-${chatId}`;
+
+    const newMessages: Message[] = sigMessages.map(sigMsg => {
+      let attachments: Attachment[] = [];
+      if (sigMsg.media && signalServerPortRef.current) {
+        const mediaUrl = `http://localhost:${signalServerPortRef.current}${sigMsg.media.url}`;
+        attachments = [{
+          id: sigMsg.id,
+          type: sigMsg.media.type === 'image' || sigMsg.media.type === 'video' ? 'image' : 'document',
+          name: sigMsg.media.filename,
+          url: mediaUrl,
+          size: sigMsg.media.filesize ? `${(sigMsg.media.filesize / 1024).toFixed(1)} KB` : '',
+          mimetype: sigMsg.media.mimetype,
+          mediaType: sigMsg.media.type
+        }];
+      }
+
+      return {
+        id: `sig-${sigMsg.id}`,
+        userId: userId,
+        platform: Platform.Signal,
+        content: sigMsg.body,
+        timestamp: new Date(sigMsg.timestamp * 1000),
+        isMe: sigMsg.fromMe,
+        hash: sigMsg.id.substring(0, 7),
+        attachments
+      };
+    });
+
+    setMessages(prev => {
+      const existingIds = new Set(prev.map(m => m.id));
+      const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const signal = useSignal('merge-app', {
+    onMessage: handleSignalMessage,
+    onChatsLoaded: handleSignalChatsLoaded,
+    onMessagesLoaded: handleSignalMessagesLoaded,
+  });
+
+  useEffect(() => {
+    signalServerPortRef.current = signal.serverPort;
+  }, [signal.serverPort]);
+
   // Auto-connect to WhatsApp on app startup (if session exists, it will reconnect)
   useEffect(() => {
     // Small delay to let the app render first
@@ -174,6 +292,16 @@ const App: React.FC = () => {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run once on mount - intentionally not including whatsapp.connect to prevent re-runs
+
+  // Auto-connect to Signal on app startup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('[App] Auto-connecting to Signal...');
+      signal.connect();
+    }, 1000); // Slight delay after WhatsApp
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Auto-select first user when users are loaded and none selected
   useEffect(() => {
@@ -191,6 +319,14 @@ const App: React.FC = () => {
       whatsapp.getMessages(chatId, 100);
     }
   }, [selectedUser?.id, whatsapp.status, whatsapp.getMessages]);
+
+  // Load messages when selecting a Signal user
+  useEffect(() => {
+    if (selectedUser?.id.startsWith('sig-') && signal.status === 'ready') {
+      const chatId = selectedUser.id.replace('sig-', '');
+      signal.getMessages(chatId, 100);
+    }
+  }, [selectedUser?.id, signal.status, signal.getMessages]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -852,6 +988,7 @@ const App: React.FC = () => {
         currentTheme={theme}
         onSetTheme={setTheme}
         whatsapp={whatsapp}
+        signal={signal}
       />
 
     </div>
