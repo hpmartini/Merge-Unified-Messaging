@@ -386,7 +386,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {signal.status === 'error' && isSignal && (
               <button
-                onClick={() => signal.startLink()}
+                onClick={() => {
+                  signal.connect();
+                  setTimeout(() => signal.startLink(), 500);
+                }}
                 className="flex items-center gap-2 mx-auto bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
