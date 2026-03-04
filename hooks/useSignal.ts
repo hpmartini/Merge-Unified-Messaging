@@ -115,9 +115,15 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
 
   const connect = useCallback(async (phoneNumber?: string) => {
     console.log('[Signal] connect() called');
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log('[Signal] Already connected');
+    if (wsRef.current?.readyState === WebSocket.OPEN || wsRef.current?.readyState === WebSocket.CONNECTING) {
+      console.log('[Signal] Already connected or connecting');
       return;
+    }
+
+    // Close any existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     setStatus('connecting');

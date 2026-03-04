@@ -41,6 +41,22 @@ const registrationState = new Map(); // Track registration in progress
 let rpcIdCounter = 1;
 const pendingRequests = new Map();
 
+// Check for existing linked accounts in signal-cli config
+function getLinkedAccount(sessionId) {
+  const accountsFile = join(SIGNAL_CONFIG_DIR, sessionId, 'data', 'accounts.json');
+  if (existsSync(accountsFile)) {
+    try {
+      const data = JSON.parse(readFileSync(accountsFile, 'utf-8'));
+      if (data.accounts && data.accounts.length > 0) {
+        return data.accounts[0].number;
+      }
+    } catch (e) {
+      console.error(`[${sessionId}] Error reading accounts.json:`, e.message);
+    }
+  }
+  return null;
+}
+
 // ============ DATA PERSISTENCE ============
 
 function getDataPath(sessionId, type) {
@@ -485,7 +501,7 @@ wss.on('connection', (ws, req) => {
 
       switch (msg.type) {
         case 'init':
-          // Check if we have an existing session with a phone number
+          // Check if we have an existing running process
           const existingProc = signalProcesses.get(sessionId);
           if (existingProc) {
             broadcastToSession(sessionId, {
@@ -497,11 +513,35 @@ wss.on('connection', (ws, req) => {
               }
             });
           } else {
-            // Need to link/register
-            broadcastToSession(sessionId, {
-              type: 'need_setup',
-              message: 'Signal account not connected. Use link or register.'
-            });
+            // Check if there's a linked account in config
+            const linkedPhone = getLinkedAccount(sessionId);
+            if (linkedPhone) {
+              // Auto-start the Signal process for the linked account
+              console.log(`[${sessionId}] Found linked account ${linkedPhone}, starting process...`);
+              try {
+                await createSignalProcess(sessionId, linkedPhone);
+                broadcastToSession(sessionId, {
+                  type: 'ready',
+                  user: {
+                    id: linkedPhone,
+                    name: linkedPhone,
+                    phone: linkedPhone
+                  }
+                });
+              } catch (err) {
+                console.error(`[${sessionId}] Error starting process for linked account:`, err);
+                broadcastToSession(sessionId, {
+                  type: 'error',
+                  message: `Failed to reconnect: ${err.message}`
+                });
+              }
+            } else {
+              // Need to link/register
+              broadcastToSession(sessionId, {
+                type: 'need_setup',
+                message: 'Signal account not connected. Use link or register.'
+              });
+            }
           }
           break;
 
@@ -593,7 +633,7 @@ wss.on('connection', (ws, req) => {
           break;
 
         case 'getChats':
-          // Get contacts/chats
+          // Get contacts/chats and groups
           const chatsProcData = signalProcesses.get(sessionId);
 
           // First send cached chats
@@ -604,14 +644,32 @@ wss.on('connection', (ws, req) => {
 
           if (chatsProcData) {
             try {
+              // Get contacts
               const contacts = await sendJsonRpc(chatsProcData.process, 'listContacts');
-              const chatList = (contacts || []).map(contact => ({
+              const contactList = (contacts || []).map(contact => ({
                 id: contact.number || contact.uuid,
                 name: contact.name || contact.number || contact.uuid,
                 isGroup: false,
                 unreadCount: 0,
                 avatarUrl: null
               }));
+
+              // Get groups
+              let groupList = [];
+              try {
+                const groups = await sendJsonRpc(chatsProcData.process, 'listGroups');
+                groupList = (groups || []).map(group => ({
+                  id: group.id,
+                  name: group.name || 'Unnamed Group',
+                  isGroup: true,
+                  unreadCount: 0,
+                  avatarUrl: null
+                }));
+              } catch (groupErr) {
+                console.log(`[${sessionId}] Could not fetch groups:`, groupErr.message);
+              }
+
+              const chatList = [...contactList, ...groupList];
 
               // Save to cache
               chatList.forEach(chat => saveChat(sessionId, chat));

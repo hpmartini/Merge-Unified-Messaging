@@ -49,8 +49,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = useState<'general' | 'accounts'>('general');
   const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
     [Platform.Mail]: false,
-    [Platform.WhatsApp]: false,
-    [Platform.Signal]: false,
+    [Platform.WhatsApp]: whatsapp.status === 'ready',
+    [Platform.Signal]: signal.status === 'ready',
   });
 
   // Add Account Flow State
@@ -637,7 +637,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="grid grid-cols-1 gap-2">
                             {group.items.map(p => {
                                 const config = PLATFORM_CONFIG[p as Platform];
-                                const isConnected = connectedAccounts[p as string];
+                                // Check actual hook status for WhatsApp and Signal
+                                const isConnected = p === Platform.WhatsApp ? whatsapp.status === 'ready'
+                                  : p === Platform.Signal ? signal.status === 'ready'
+                                  : connectedAccounts[p as string];
                                 return (
                                 <div key={p} className="flex items-center justify-between p-3 rounded-lg bg-theme-base border border-theme hover:border-slate-500/50 transition-colors">
                                     <div className="flex items-center gap-3">
