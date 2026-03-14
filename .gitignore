@@ -35,3 +35,6 @@ server/signal-cli/
 
 # Signal session data (contains auth tokens - DO NOT COMMIT)
 server/signal-config/
+
+# Signal data cache (messages, contacts - personal data)
+server/data-signal/
