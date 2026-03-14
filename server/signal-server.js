@@ -213,7 +213,31 @@ function handleIncomingMessage(sessionId, params) {
   const { envelope } = params;
   if (!envelope) return;
 
-  const { source, sourceNumber, sourceName, timestamp, dataMessage, syncMessage } = envelope;
+  const { source, sourceNumber, sourceName, timestamp, dataMessage, syncMessage, contactsMessage, typingMessage } = envelope;
+
+  // Handle contacts sync
+  if (contactsMessage) {
+    console.log(`[${sessionId}] Received contacts sync`);
+    // Contacts sync received - refresh contacts list
+    const procData = signalProcesses.get(sessionId);
+    if (procData) {
+      sendJsonRpc(procData.process, 'listContacts').then(contacts => {
+        const contactList = (contacts || []).map(contact => ({
+          id: contact.number || contact.uuid,
+          name: contact.name || contact.profileName || contact.number || contact.uuid,
+          isGroup: false,
+          unreadCount: 0,
+          avatarUrl: null
+        }));
+        contactList.forEach(chat => saveChat(sessionId, chat));
+        broadcastToSession(sessionId, { type: 'chats', chats: contactList, cached: false });
+      }).catch(err => console.error(`[${sessionId}] Error refreshing contacts:`, err));
+    }
+    return;
+  }
+
+  // Skip typing messages
+  if (typingMessage) return;
 
   // Handle regular data messages
   if (dataMessage) {
@@ -253,6 +277,20 @@ function handleIncomingMessage(sessionId, params) {
   }
 
   // Handle sync messages (messages sent from our other devices)
+  if (syncMessage) {
+    console.log(`[${sessionId}] Received sync message:`, JSON.stringify(syncMessage).substring(0, 500));
+
+    // Handle contacts sync within sync message
+    if (syncMessage.contacts) {
+      console.log(`[${sessionId}] Processing contacts from sync`);
+    }
+
+    // Handle groups sync within sync message
+    if (syncMessage.groups) {
+      console.log(`[${sessionId}] Processing groups from sync`);
+    }
+  }
+
   if (syncMessage && syncMessage.sentMessage) {
     const { destination, destinationNumber, timestamp: sentTimestamp, message } = syncMessage.sentMessage;
     const chatId = destinationNumber || destination;
@@ -287,7 +325,7 @@ async function createSignalProcess(sessionId, phoneNumber) {
     '-a', phoneNumber,
     '-o', 'json',
     'jsonRpc',
-    '--receive-mode', 'on-connection'
+    '--receive-mode', 'on-start'
   ], {
     stdio: ['pipe', 'pipe', 'pipe']
   });
@@ -328,6 +366,9 @@ async function createSignalProcess(sessionId, phoneNumber) {
 
   // Wait a bit for process to start
   await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // NOTE: Do NOT call sendSyncRequest - it can cause issues with the user's Signal account
+  // Contacts will only appear when messages are sent/received
 
   return proc;
 }
