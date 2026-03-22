@@ -30,7 +30,7 @@ app.use('/avatars', express.static(AVATARS_DIR));
 app.use('/media', express.static(MEDIA_DIR));
 
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+let wss;
 
 // Store active Signal processes and connections
 const signalProcesses = new Map();
@@ -528,7 +528,8 @@ async function linkDevice(sessionId) {
 
 // ============ WEBSOCKET HANDLER ============
 
-wss.on('connection', (ws, req) => {
+function setupWebSocket() {
+  wss.on('connection', (ws, req) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const sessionId = url.searchParams.get('sessionId') || 'default';
 
@@ -781,7 +782,8 @@ wss.on('connection', (ws, req) => {
     console.log(`[${sessionId}] WebSocket disconnected`);
     wsConnections.delete(sessionId);
   });
-});
+  });
+}
 
 // ============ REST ENDPOINTS ============
 
@@ -824,23 +826,45 @@ app.get('/api/port', (req, res) => {
 const PREFERRED_PORT = parseInt(process.env.SIGNAL_PORT) || 3043;
 const MAX_PORT_ATTEMPTS = 10;
 
-function tryListen(port, attempt = 0) {
-  if (attempt >= MAX_PORT_ATTEMPTS) {
-    console.error('Could not find an available port after', MAX_PORT_ATTEMPTS, 'attempts');
-    process.exit(1);
+async function findAvailablePort(startPort, maxAttempts = 10) {
+  const net = await import('net');
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const port = startPort + attempt;
+    const isAvailable = await new Promise((resolve) => {
+      const tester = net.createServer()
+        .once('error', () => resolve(false))
+        .once('listening', () => {
+          tester.close();
+          resolve(true);
+        })
+        .listen(port);
+    });
+
+    if (isAvailable) {
+      return port;
+    }
+    console.log(`Port ${port} in use, trying ${port + 1}...`);
   }
 
-  server.listen(port, () => {
-    console.log(`Signal server running on http://localhost:${port}`);
-    console.log(`WebSocket available at ws://localhost:${port}`);
-  }).on('error', (err) => {
-    if (err.code === 'EADDRINUSE') {
-      console.log(`Port ${port} in use, trying ${port + 1}...`);
-      tryListen(port + 1, attempt + 1);
-    } else {
-      throw err;
-    }
-  });
+  throw new Error(`Could not find an available port after ${maxAttempts} attempts`);
 }
 
-tryListen(PREFERRED_PORT);
+async function startServer() {
+  try {
+    const port = await findAvailablePort(PREFERRED_PORT);
+
+    wss = new WebSocketServer({ server });
+    setupWebSocket();
+
+    server.listen(port, () => {
+      console.log(`Signal server running on http://localhost:${port}`);
+      console.log(`WebSocket available at ws://localhost:${port}`);
+    });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
+startServer();
