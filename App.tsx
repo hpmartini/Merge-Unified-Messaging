@@ -201,21 +201,40 @@ const App: React.FC = () => {
   }, []);
 
   const handleSignalChatsLoaded = useCallback((chats: SignalChat[]) => {
+    if (!chats || chats.length === 0) return;
+
     const sigUsers: User[] = chats
-      .filter(chat => !chat.isGroup)
+      .filter(chat => chat.name && chat.name.trim())
       .map(chat => {
         let avatarUrl: string | undefined;
         if (chat.avatarUrl && signalServerPortRef.current) {
           avatarUrl = `http://localhost:${signalServerPortRef.current}${chat.avatarUrl}`;
         }
 
+        const name = chat.name.trim();
+        let avatarInitials: string;
+
+        if (chat.isGroup) {
+          // For groups, use first letters of first two words or "GR" fallback
+          const words = name.split(/\s+/).filter(w => w.length > 0);
+          avatarInitials = words.length >= 2
+            ? (words[0][0] + words[1][0]).toUpperCase()
+            : name.substring(0, 2).toUpperCase() || 'GR';
+        } else {
+          // For contacts, safely get initials from name parts
+          const parts = name.split(' ').filter(p => p.length > 0);
+          avatarInitials = parts.length >= 2
+            ? (parts[0][0] + parts[1][0]).toUpperCase()
+            : name.substring(0, 2).toUpperCase() || '??';
+        }
+
         return {
           id: `sig-${chat.id}`,
-          name: chat.name,
-          avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+          name: name,
+          avatarInitials,
           avatarUrl,
           activePlatforms: [Platform.Signal],
-          role: 'Signal Contact'
+          role: chat.isGroup ? 'Signal Group' : 'Signal Contact'
         };
       });
 

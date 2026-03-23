@@ -15,9 +15,9 @@ interface SidebarProps {
   onOpenSettings: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ 
-  users, 
-  selectedUser, 
+const Sidebar: React.FC<SidebarProps> = ({
+  users,
+  selectedUser,
   onSelectUser,
   searchQuery,
   setSearchQuery,
@@ -26,6 +26,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings
 }) => {
   const isSearching = searchQuery.trim().length > 0;
+
+  // Filter users by name when searching
+  const filteredUsers = isSearching
+    ? users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : users;
 
   const highlightText = (text: string, highlight: string) => {
     if (!highlight.trim()) return text;
@@ -150,18 +155,86 @@ const Sidebar: React.FC<SidebarProps> = ({
           </>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-2">
+            {/* Matching Contacts */}
+            {filteredUsers.length > 0 && (
+              <>
+                <div className="px-4 pb-2 text-[10px] font-bold text-theme-muted uppercase tracking-widest mt-2 flex items-center justify-between">
+                  <span>Contacts</span>
+                  <span className="text-[9px] bg-green-600/20 text-green-400 border border-green-500/20 px-1.5 rounded-full">{filteredUsers.length}</span>
+                </div>
+                <ul className="md:px-1 lg:px-0 mb-4">
+                  {filteredUsers.map(user => (
+                    <li key={user.id}>
+                      <button
+                        onClick={() => {
+                          onSelectUser(user);
+                          setSearchQuery('');
+                        }}
+                        className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
+                          selectedUser?.id === user.id
+                            ? 'bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-blue-500'
+                            : 'hover:bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-transparent'
+                        }`}
+                      >
+                        {user.avatarUrl ? (
+                          <img
+                            src={user.avatarUrl}
+                            alt={user.name}
+                            className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${
+                              selectedUser?.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
+                            }`}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${user.avatarUrl ? 'hidden' : ''} ${
+                           selectedUser?.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
+                        }`}>
+                          {user.avatarInitials}
+                        </div>
+                        <div className="flex-1 min-w-0 md:hidden lg:block">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-theme-main truncate text-sm">
+                              {highlightText(user.name, searchQuery)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            {user.activePlatforms.slice(0, 3).map(p => (
+                              <div
+                                key={p}
+                                className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`}
+                                title={PLATFORM_CONFIG[p].label}
+                              />
+                            ))}
+                            <span className="text-[11px] text-theme-muted ml-1 truncate font-medium">{user.role}</span>
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {/* Message Search Results */}
             <div className="px-4 pb-2 text-[10px] font-bold text-theme-muted uppercase tracking-widest mt-2 flex items-center justify-between">
-              <span>Search Results</span>
+              <span>Messages</span>
               <span className="text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/20 px-1.5 rounded-full">{searchResults.length}</span>
             </div>
-            
-            {searchResults.length === 0 ? (
+
+            {searchResults.length === 0 && filteredUsers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
                 <div className="w-12 h-12 rounded-full bg-theme-base flex items-center justify-center mb-4 border border-theme">
                   <Search className="w-6 h-6 text-theme-muted" />
                 </div>
                 <p className="text-sm text-theme-muted font-medium">No results found</p>
-                <p className="text-xs text-theme-muted mt-1">Try searching for keywords, dates, or subject lines</p>
+                <p className="text-xs text-theme-muted mt-1">Try searching for keywords, dates, or contact names</p>
+              </div>
+            ) : searchResults.length === 0 ? (
+              <div className="px-4 py-4 text-xs text-theme-muted text-center">
+                No messages found
               </div>
             ) : (
               <ul>
