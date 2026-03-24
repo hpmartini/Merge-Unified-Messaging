@@ -5,8 +5,9 @@ import { createServer } from 'http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, createWriteStream } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { createInterface } from 'readline';
+import { createDecipheriv, pbkdf2Sync } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data-signal');
@@ -110,6 +111,130 @@ function saveChat(sessionId, chat) {
     chats.push(chat);
   }
   saveData(sessionId, 'chats', chats);
+}
+
+// ============ SIGNAL DESKTOP IMPORT ============
+
+async function importSignalDesktopMessages(sessionId) {
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
+  const configPath = join(homeDir, 'Library', 'Application Support', 'Signal', 'config.json');
+  const dbPath = join(homeDir, 'Library', 'Application Support', 'Signal', 'sql', 'db.sqlite');
+
+  if (!existsSync(configPath) || !existsSync(dbPath)) {
+    console.log(`[${sessionId}] Signal Desktop not found, skipping import`);
+    return;
+  }
+
+  // Check if we already have cached messages — only import if cache is empty
+  const existingMessages = loadData(sessionId, 'messages');
+  if (Object.keys(existingMessages).length > 0) {
+    console.log(`[${sessionId}] Signal cache already has messages, skipping Desktop import`);
+    return;
+  }
+
+  try {
+    // Get DB encryption key via keytar
+    let keytar;
+    try {
+      keytar = await import('keytar');
+    } catch {
+      console.log(`[${sessionId}] keytar not available, skipping Signal Desktop import`);
+      return;
+    }
+
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    if (!config.encryptedKey) {
+      console.log(`[${sessionId}] No encryptedKey in Signal config`);
+      return;
+    }
+
+    const password = await keytar.default.getPassword('Signal Safe Storage', 'Signal Key');
+    if (!password) {
+      console.log(`[${sessionId}] Could not get Signal key from keychain`);
+      return;
+    }
+
+    const encrypted = Buffer.from(config.encryptedKey, 'hex');
+    const key = pbkdf2Sync(password, 'saltysalt', 1003, 16, 'sha1');
+    const iv = Buffer.from(' '.repeat(16));
+    const decipher = createDecipheriv('aes-128-cbc', key, iv);
+    let decrypted = decipher.update(encrypted.subarray(3));
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    const dbKey = decrypted.toString('utf8');
+
+    // sqlcipher queries use only internal constants, no user input (safe from injection)
+    function sqlQuery(query) {
+      const pragmaAndQuery = `PRAGMA key = "x'${dbKey}'";\n.mode json\n${query}`;
+      const result = execSync(`echo ${JSON.stringify(pragmaAndQuery)} | sqlcipher ${JSON.stringify(dbPath)}`, {
+        encoding: 'utf8',
+        maxBuffer: 50 * 1024 * 1024
+      });
+      const jsonStart = result.indexOf('[');
+      if (jsonStart === -1) return [];
+      try { return JSON.parse(result.substring(jsonStart)); } catch { return []; }
+    }
+
+    const conversations = sqlQuery(
+      "SELECT id, json_extract(json, '$.e164') as phone, json_extract(json, '$.name') as name, json_extract(json, '$.profileName') as profile FROM conversations WHERE json_extract(json, '$.type') = 'private' AND json_extract(json, '$.e164') IS NOT NULL;"
+    );
+
+    console.log(`[${sessionId}] Signal Desktop: found ${conversations.length} conversations`);
+
+    const messages = {};
+    let totalMessages = 0;
+
+    for (const conv of conversations) {
+      const { id: convId, phone, name, profile } = conv;
+      if (!phone) continue;
+      const contactName = name || profile || phone;
+
+      const msgs = sqlQuery(
+        `SELECT sent_at, type, body, hasAttachments FROM messages WHERE conversationId = '${convId}' AND body IS NOT NULL AND body != '' ORDER BY sent_at DESC LIMIT 50;`
+      );
+
+      if (msgs.length === 0) continue;
+      messages[phone] = [];
+
+      for (const msg of msgs) {
+        const sentAt = parseInt(msg.sent_at);
+        const msgType = msg.type;
+        messages[phone].push({
+          id: `${sentAt}_${phone}${msgType === 'outgoing' ? '_sent' : ''}`,
+          from: msgType === 'outgoing' ? 'me' : phone,
+          to: msgType === 'outgoing' ? phone : 'me',
+          body: msg.body || '',
+          timestamp: Math.floor(sentAt / 1000),
+          fromMe: msgType === 'outgoing',
+          contactName: msgType === 'outgoing' ? 'Me' : contactName,
+          chatName: contactName,
+          hasMedia: (parseInt(msg.hasAttachments) || 0) > 0,
+          type: (parseInt(msg.hasAttachments) || 0) > 0 ? 'media' : 'text',
+          media: null
+        });
+        totalMessages++;
+      }
+      messages[phone].sort((a, b) => a.timestamp - b.timestamp);
+    }
+
+    saveData(sessionId, 'messages', messages);
+
+    // Update chat timestamps
+    const chats = loadData(sessionId, 'chats');
+    for (const [chatId, msgs] of Object.entries(messages)) {
+      if (msgs.length === 0) continue;
+      const lastMsg = msgs[msgs.length - 1];
+      const chatIdx = chats.findIndex(c => c.id === chatId);
+      if (chatIdx >= 0) {
+        chats[chatIdx].lastMessage = lastMsg.body;
+        chats[chatIdx].timestamp = lastMsg.timestamp;
+      }
+    }
+    saveData(sessionId, 'chats', chats);
+
+    console.log(`[${sessionId}] Imported ${totalMessages} messages from ${Object.keys(messages).length} Signal Desktop conversations`);
+  } catch (err) {
+    console.log(`[${sessionId}] Signal Desktop import failed (non-fatal):`, err.message);
+  }
 }
 
 // ============ MEDIA HANDLING ============
@@ -292,25 +417,41 @@ function handleIncomingMessage(sessionId, params) {
   }
 
   if (syncMessage && syncMessage.sentMessage) {
-    const { destination, destinationNumber, timestamp: sentTimestamp, message } = syncMessage.sentMessage;
+    const { destination, destinationNumber, timestamp: sentTimestamp, message, dataMessage: sentDataMessage } = syncMessage.sentMessage;
     const chatId = destinationNumber || destination;
+    // Message body can be in sentMessage.message (older signal-cli) or sentMessage.dataMessage.message (newer)
+    const body = message || sentDataMessage?.message || '';
+    const hasAttachments = !!(sentDataMessage?.attachments?.length);
 
-    const msgData = {
-      id: `${sentTimestamp}_${chatId}_sent`,
-      from: 'me',
-      to: chatId,
-      body: message || '',
-      timestamp: Math.floor(sentTimestamp / 1000),
-      fromMe: true,
-      contactName: 'Me',
-      chatName: chatId,
-      hasMedia: false,
-      type: 'text',
-      media: null
-    };
+    if (chatId) {
+      const msgData = {
+        id: `${sentTimestamp}_${chatId}_sent`,
+        from: 'me',
+        to: chatId,
+        body: body,
+        timestamp: Math.floor(sentTimestamp / 1000),
+        fromMe: true,
+        contactName: 'Me',
+        chatName: chatId,
+        hasMedia: hasAttachments,
+        type: hasAttachments ? 'media' : 'text',
+        media: null
+      };
 
-    saveMessage(sessionId, chatId, msgData);
-    broadcastToSession(sessionId, { type: 'message', message: msgData });
+      saveMessage(sessionId, chatId, msgData);
+
+      // Update chat with last message
+      saveChat(sessionId, {
+        id: chatId,
+        name: chatId,
+        isGroup: false,
+        unreadCount: 0,
+        lastMessage: body,
+        timestamp: msgData.timestamp
+      });
+
+      broadcastToSession(sessionId, { type: 'message', message: msgData });
+    }
   }
 }
 
@@ -367,8 +508,14 @@ async function createSignalProcess(sessionId, phoneNumber) {
   // Wait a bit for process to start
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // NOTE: Do NOT call sendSyncRequest - it can cause issues with the user's Signal account
-  // Contacts will only appear when messages are sent/received
+  // Request message sync from primary device (standard operation for linked devices)
+  try {
+    console.log(`[${sessionId}] Requesting message sync from primary device...`);
+    await sendJsonRpc(proc, 'sendSyncRequest');
+    console.log(`[${sessionId}] Sync request sent successfully`);
+  } catch (err) {
+    console.log(`[${sessionId}] Sync request failed (non-fatal):`, err.message);
+  }
 
   return proc;
 }
@@ -667,6 +814,32 @@ function setupWebSocket() {
                 recipient: [msg.to],
                 message: msg.body
               });
+
+              // Save sent message to cache
+              const sentMessage = {
+                id: `${Date.now()}_${msg.to}_sent`,
+                from: 'me',
+                to: msg.to,
+                body: msg.body,
+                timestamp: Math.floor(Date.now() / 1000),
+                fromMe: true,
+                contactName: 'Me',
+                chatName: msg.to,
+                hasMedia: false,
+                type: 'text',
+                media: null
+              };
+              saveMessage(sessionId, msg.to, sentMessage);
+
+              // Update chat timestamp
+              const chats = loadData(sessionId, 'chats');
+              const chatIdx = chats.findIndex(c => c.id === msg.to);
+              if (chatIdx !== -1) {
+                chats[chatIdx].lastMessage = msg.body;
+                chats[chatIdx].timestamp = sentMessage.timestamp;
+                saveData(sessionId, 'chats', chats);
+              }
+
               broadcastToSession(sessionId, { type: 'sent', messageId: msg.messageId });
             } catch (err) {
               broadcastToSession(sessionId, { type: 'error', message: err.message });
@@ -677,6 +850,26 @@ function setupWebSocket() {
         case 'getChats':
           // Get contacts/chats and groups
           const chatsProcData = signalProcesses.get(sessionId);
+
+          // Helper: resolve contact name with proper fallback chain
+          const resolveContactName = (contact) => {
+            if (contact.name?.trim()) return contact.name;
+            if (contact.profileName?.trim()) return contact.profileName;
+            const fullName = [contact.givenName, contact.familyName].filter(Boolean).join(' ').trim();
+            if (fullName) return fullName;
+            if (contact.number) return contact.number;
+            return contact.uuid ? `Unknown (${contact.uuid.slice(0, 8)}...)` : 'Unknown';
+          };
+
+          // Helper: resolve group name with descriptive fallback
+          const resolveGroupName = (group) => {
+            if (group.name?.trim()) return group.name;
+            if (group.title?.trim()) return group.title;
+            const memberCount = group.members?.length || group.memberCount;
+            if (memberCount) return `Group (${memberCount} members)`;
+            if (group.id) return `Group ${group.id.slice(0, 8)}...`;
+            return 'Unnamed Group';
+          };
 
           // First send cached chats
           const cachedChats = loadData(sessionId, 'chats');
@@ -690,10 +883,12 @@ function setupWebSocket() {
               const contacts = await sendJsonRpc(chatsProcData.process, 'listContacts');
               const contactList = (contacts || []).map(contact => ({
                 id: contact.number || contact.uuid,
-                name: contact.name || contact.number || contact.uuid,
+                name: resolveContactName(contact),
                 isGroup: false,
                 unreadCount: 0,
-                avatarUrl: null
+                avatarUrl: null,
+                lastMessage: null,
+                timestamp: null
               }));
 
               // Get groups
@@ -702,16 +897,37 @@ function setupWebSocket() {
                 const groups = await sendJsonRpc(chatsProcData.process, 'listGroups');
                 groupList = (groups || []).map(group => ({
                   id: group.id,
-                  name: group.name || 'Unnamed Group',
+                  name: resolveGroupName(group),
                   isGroup: true,
                   unreadCount: 0,
-                  avatarUrl: null
+                  avatarUrl: null,
+                  lastMessage: null,
+                  timestamp: null,
+                  memberCount: group.members?.length || group.memberCount || 0
                 }));
               } catch (groupErr) {
                 console.log(`[${sessionId}] Could not fetch groups:`, groupErr.message);
               }
 
-              const chatList = [...contactList, ...groupList];
+              let chatList = [...contactList, ...groupList];
+
+              // Enhance chats with last message from cached messages
+              const allCachedMessages = loadData(sessionId, 'messages');
+              chatList = chatList.map(chat => {
+                const messages = allCachedMessages[chat.id] || [];
+                if (messages.length > 0) {
+                  const lastMsg = messages.sort((a, b) => b.timestamp - a.timestamp)[0];
+                  return {
+                    ...chat,
+                    lastMessage: lastMsg?.body || (lastMsg?.hasMedia ? '[Media]' : null),
+                    timestamp: lastMsg?.timestamp || null
+                  };
+                }
+                return chat;
+              });
+
+              // Sort by timestamp (most recent first), chats without messages at the end
+              chatList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
               // Save to cache
               chatList.forEach(chat => saveChat(sessionId, chat));
@@ -857,9 +1073,26 @@ async function startServer() {
     wss = new WebSocketServer({ server });
     setupWebSocket();
 
-    server.listen(port, () => {
+    server.listen(port, async () => {
       console.log(`Signal server running on http://localhost:${port}`);
       console.log(`WebSocket available at ws://localhost:${port}`);
+
+      // Auto-start signal-cli for any linked accounts so messages are always captured
+      const DEFAULT_SESSION = 'merge-app';
+
+      // Import messages from Signal Desktop if cache is empty
+      await importSignalDesktopMessages(DEFAULT_SESSION);
+
+      const linkedPhone = getLinkedAccount(DEFAULT_SESSION);
+      if (linkedPhone && !signalProcesses.has(DEFAULT_SESSION)) {
+        console.log(`[${DEFAULT_SESSION}] Auto-starting signal-cli for ${linkedPhone} to capture messages...`);
+        try {
+          await createSignalProcess(DEFAULT_SESSION, linkedPhone);
+          console.log(`[${DEFAULT_SESSION}] signal-cli auto-started successfully`);
+        } catch (err) {
+          console.error(`[${DEFAULT_SESSION}] Failed to auto-start signal-cli:`, err.message);
+        }
+      }
     });
   } catch (err) {
     console.error(err.message);

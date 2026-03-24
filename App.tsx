@@ -90,7 +90,8 @@ const App: React.FC = () => {
           avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
           avatarUrl,
           activePlatforms: [Platform.WhatsApp],
-          role: 'WhatsApp Contact'
+          role: 'WhatsApp Contact',
+          lastMessageTime: chat.timestamp ? new Date(chat.timestamp * 1000) : undefined
         };
       });
 
@@ -99,11 +100,17 @@ const App: React.FC = () => {
       const existingIds = new Set(prev.map(u => u.id));
       const newUsers = waUsers.filter(u => !existingIds.has(u.id));
 
-      // Update avatars for existing WhatsApp users
+      // Update avatars and timestamps for existing WhatsApp users
       const updatedPrev = prev.map(u => {
         const waUser = waUsers.find(wa => wa.id === u.id);
-        if (waUser && waUser.avatarUrl && !u.avatarUrl) {
-          return { ...u, avatarUrl: waUser.avatarUrl };
+        if (waUser) {
+          return {
+            ...u,
+            avatarUrl: u.avatarUrl || waUser.avatarUrl,
+            lastMessageTime: waUser.lastMessageTime && (!u.lastMessageTime || waUser.lastMessageTime > u.lastMessageTime)
+              ? waUser.lastMessageTime
+              : u.lastMessageTime
+          };
         }
         return u;
       });
@@ -160,9 +167,10 @@ const App: React.FC = () => {
     onMessagesLoaded: handleWhatsAppMessagesLoaded,
   });
 
-  // Keep server port ref updated for avatar URLs
+  // Keep server port ref updated for avatar URLs (sync + effect for safety)
+  if (whatsapp.serverPort) serverPortRef.current = whatsapp.serverPort;
   useEffect(() => {
-    serverPortRef.current = whatsapp.serverPort;
+    if (whatsapp.serverPort) serverPortRef.current = whatsapp.serverPort;
   }, [whatsapp.serverPort]);
 
   // Signal Integration
@@ -200,11 +208,29 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Helper to check if a name looks like a proper name (not a UUID, phone number only, etc.)
+  const isProperName = (name: string): boolean => {
+    if (!name || !name.trim()) return false;
+    const trimmed = name.trim();
+    // Skip UUIDs (like d1de889c-9889-4c9a-81ce-29a6efeb3571)
+    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(trimmed)) return false;
+    // Skip pure phone numbers (but allow names with phone numbers)
+    if (/^\+?[\d\s-]+$/.test(trimmed)) return false;
+    // Skip very short names (likely initials or codes)
+    if (trimmed.length < 2) return false;
+    return true;
+  };
+
+  // Helper to normalize name for matching (merge contacts)
+  const normalizeName = (name: string): string => {
+    return name.trim().toLowerCase().replace(/\s+/g, ' ');
+  };
+
   const handleSignalChatsLoaded = useCallback((chats: SignalChat[]) => {
     if (!chats || chats.length === 0) return;
 
     const sigUsers: User[] = chats
-      .filter(chat => chat.name && chat.name.trim())
+      .filter(chat => chat.name && chat.name.trim() && isProperName(chat.name))
       .map(chat => {
         let avatarUrl: string | undefined;
         if (chat.avatarUrl && signalServerPortRef.current) {
@@ -215,13 +241,11 @@ const App: React.FC = () => {
         let avatarInitials: string;
 
         if (chat.isGroup) {
-          // For groups, use first letters of first two words or "GR" fallback
           const words = name.split(/\s+/).filter(w => w.length > 0);
           avatarInitials = words.length >= 2
             ? (words[0][0] + words[1][0]).toUpperCase()
             : name.substring(0, 2).toUpperCase() || 'GR';
         } else {
-          // For contacts, safely get initials from name parts
           const parts = name.split(' ').filter(p => p.length > 0);
           avatarInitials = parts.length >= 2
             ? (parts[0][0] + parts[1][0]).toUpperCase()
@@ -234,23 +258,45 @@ const App: React.FC = () => {
           avatarInitials,
           avatarUrl,
           activePlatforms: [Platform.Signal],
-          role: chat.isGroup ? 'Signal Group' : 'Signal Contact'
+          role: chat.isGroup ? 'Signal Group' : 'Signal Contact',
+          lastMessageTime: chat.timestamp ? new Date(chat.timestamp * 1000) : undefined
         };
       });
 
     setUsers(prev => {
-      const existingIds = new Set(prev.map(u => u.id));
-      const newUsers = sigUsers.filter(u => !existingIds.has(u.id));
+      // Try to merge Signal users with existing users by name
+      const mergedUsers = [...prev];
+      const addedSignalUsers: User[] = [];
 
-      const updatedPrev = prev.map(u => {
-        const sigUser = sigUsers.find(sig => sig.id === u.id);
-        if (sigUser && sigUser.avatarUrl && !u.avatarUrl) {
-          return { ...u, avatarUrl: sigUser.avatarUrl };
+      for (const sigUser of sigUsers) {
+        const normalizedSigName = normalizeName(sigUser.name);
+        // Find existing user with same name (case-insensitive)
+        const existingIdx = mergedUsers.findIndex(u => normalizeName(u.name) === normalizedSigName);
+
+        if (existingIdx !== -1) {
+          // Merge: add Signal platform to existing user
+          const existing = mergedUsers[existingIdx];
+          if (!existing.activePlatforms.includes(Platform.Signal)) {
+            mergedUsers[existingIdx] = {
+              ...existing,
+              activePlatforms: [...existing.activePlatforms, Platform.Signal],
+              avatarUrl: existing.avatarUrl || sigUser.avatarUrl,
+              role: 'Contact',
+              // Track the Signal ID as an alternate ID for message lookup
+              alternateIds: [...(existing.alternateIds || []), sigUser.id],
+              // Use the more recent timestamp
+              lastMessageTime: sigUser.lastMessageTime && (!existing.lastMessageTime || sigUser.lastMessageTime > existing.lastMessageTime)
+                ? sigUser.lastMessageTime
+                : existing.lastMessageTime
+            };
+          }
+        } else {
+          // No match by name, add as new user
+          addedSignalUsers.push(sigUser);
         }
-        return u;
-      });
+      }
 
-      return [...updatedPrev, ...newUsers];
+      return [...mergedUsers, ...addedSignalUsers];
     });
   }, []);
 
@@ -297,8 +343,9 @@ const App: React.FC = () => {
     onMessagesLoaded: handleSignalMessagesLoaded,
   });
 
+  if (signal.serverPort) signalServerPortRef.current = signal.serverPort;
   useEffect(() => {
-    signalServerPortRef.current = signal.serverPort;
+    if (signal.serverPort) signalServerPortRef.current = signal.serverPort;
   }, [signal.serverPort]);
 
   // Auto-connect to WhatsApp on app startup (if session exists, it will reconnect)
@@ -329,23 +376,68 @@ const App: React.FC = () => {
     }
   }, [users, selectedUser]);
 
-  // Load messages when selecting a WhatsApp user
+  // Load messages when selecting a user (handles merged contacts too)
   useEffect(() => {
-    console.log('[App] Load messages effect - selectedUser:', selectedUser?.id, 'status:', whatsapp.status);
-    if (selectedUser?.id.startsWith('wa-') && whatsapp.status === 'ready') {
-      const chatId = selectedUser.id.replace('wa-', '') + '@c.us';
-      console.log('[App] Requesting messages for chatId:', chatId);
-      whatsapp.getMessages(chatId, 100);
-    }
-  }, [selectedUser?.id, whatsapp.status, whatsapp.getMessages]);
+    if (!selectedUser) return;
 
-  // Load messages when selecting a Signal user
-  useEffect(() => {
-    if (selectedUser?.id.startsWith('sig-') && signal.status === 'ready') {
-      const chatId = selectedUser.id.replace('sig-', '');
-      signal.getMessages(chatId, 100);
+    console.log('[App] Load messages effect triggered for:', selectedUser.id, 'alternateIds:', selectedUser.alternateIds);
+
+    // Collect all WhatsApp IDs (primary + alternates)
+    const whatsappIds = [
+      ...(selectedUser.id.startsWith('wa-') ? [selectedUser.id] : []),
+      ...(selectedUser.alternateIds?.filter(id => id.startsWith('wa-')) || [])
+    ];
+
+    // Load WhatsApp messages
+    if (whatsapp.status === 'ready') {
+      for (const waId of whatsappIds) {
+        const chatId = waId.replace('wa-', '') + '@c.us';
+        console.log('[App] Requesting WhatsApp messages for:', chatId);
+        whatsapp.getMessages(chatId, 100);
+      }
     }
-  }, [selectedUser?.id, signal.status, signal.getMessages]);
+
+    // Collect all Signal IDs (primary + alternates)
+    const signalIds = [
+      ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
+      ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
+    ];
+
+    // Load Signal messages
+    if (signal.status === 'ready') {
+      console.log('[App] Signal IDs to load:', signalIds);
+      for (const sigId of signalIds) {
+        const chatId = sigId.replace('sig-', '');
+        console.log('[App] Requesting Signal messages for:', chatId);
+        signal.getMessages(chatId, 100);
+      }
+    }
+  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, whatsapp.getMessages, signal.getMessages]);
+
+  // Preload messages for all chats when platforms become ready
+  const hasPreloadedWA = useRef(false);
+  const hasPreloadedSignal = useRef(false);
+
+  useEffect(() => {
+    if (whatsapp.status === 'ready' && whatsapp.chats.length > 0 && !hasPreloadedWA.current) {
+      hasPreloadedWA.current = true;
+      console.log('[App] Preloading WhatsApp messages for', whatsapp.chats.length, 'chats');
+      // Load messages for all chats (limited batch to avoid overloading)
+      for (const chat of whatsapp.chats.slice(0, 20)) {
+        whatsapp.getMessages(chat.id, 50);
+      }
+    }
+  }, [whatsapp.status, whatsapp.chats, whatsapp.getMessages]);
+
+  useEffect(() => {
+    if (signal.status === 'ready' && signal.chats.length > 0 && !hasPreloadedSignal.current) {
+      hasPreloadedSignal.current = true;
+      console.log('[App] Preloading Signal messages for', signal.chats.length, 'chats');
+      for (const chat of signal.chats.slice(0, 20)) {
+        signal.getMessages(chat.id, 50);
+      }
+    }
+  }, [signal.status, signal.chats, signal.getMessages]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -379,19 +471,33 @@ const App: React.FC = () => {
   // --- Derived State ---
   const userMessages = useMemo(() => {
     if (!selectedUser) return [];
-    const filtered = messages.filter(m => m.userId === selectedUser.id);
-    console.log('[App] userMessages - total messages:', messages.length, 'selectedUser.id:', selectedUser.id, 'filtered:', filtered.length);
+    // Include messages from primary ID and all alternate IDs (for merged contacts)
+    const allIds = new Set([selectedUser.id, ...(selectedUser.alternateIds || [])]);
+    const filtered = messages.filter(m => allIds.has(m.userId));
+    console.log('[App] userMessages - selectedUser.id:', selectedUser.id, 'allIds:', [...allIds], 'total messages:', messages.length, 'filtered:', filtered.length);
+    if (messages.length > 0) {
+      console.log('[App] Sample message userIds:', messages.slice(0, 5).map(m => m.userId));
+    }
     return filtered.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }, [messages, selectedUser]);
 
   const globalSearchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const query = searchQuery.toLowerCase();
-    return messages.filter(m => 
-      m.content.toLowerCase().includes(query) || 
+    return messages.filter(m =>
+      m.content.toLowerCase().includes(query) ||
       (m.subject && m.subject.toLowerCase().includes(query))
     ).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [messages, searchQuery]);
+
+  // Sort users by last message time (most recent first)
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const aTime = a.lastMessageTime?.getTime() || 0;
+      const bTime = b.lastMessageTime?.getTime() || 0;
+      return bTime - aTime; // Most recent first
+    });
+  }, [users]);
 
   // Local Match Navigation
   const localMatches = useMemo(() => {
@@ -539,9 +645,22 @@ const App: React.FC = () => {
       whatsapp.sendMessage(chatId, content);
     }
 
+    // Send via Signal if it's a Signal contact and platform is Signal
+    if (selectedUser.id.startsWith('sig-') && platform === Platform.Signal && signal.status === 'ready') {
+      const chatId = selectedUser.id.replace('sig-', '');
+      signal.sendMessage(chatId, content);
+    }
+
     setMessages([...messages, newMessage]);
     setReplyingTo(null);
     setDraftAttachments([]);
+
+    // Update user's lastMessageTime
+    setUsers(prev => prev.map(u =>
+      u.id === selectedUser.id
+        ? { ...u, lastMessageTime: newMessage.timestamp }
+        : u
+    ));
   };
 
   const togglePlatform = (p: Platform) => {
@@ -658,7 +777,7 @@ const App: React.FC = () => {
       {/* Mobile: Toggle Sidebar visibility */}
       <div className={`${showMobileChat ? 'hidden' : 'flex'} w-full md:w-auto md:flex h-full`}>
         <Sidebar
-            users={users}
+            users={sortedUsers}
             selectedUser={selectedUser}
             onSelectUser={handleUserSelection}
             searchQuery={searchQuery}

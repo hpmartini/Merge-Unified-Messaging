@@ -75,7 +75,7 @@ async function discoverWhatsAppPort(): Promise<number | null> {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.port) {
+        if (data.port && data.service === 'whatsapp') {
           console.log(`[WhatsApp] Discovered server on port ${data.port}`);
           return data.port;
         }

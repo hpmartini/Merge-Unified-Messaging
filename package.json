@@ -16,6 +16,7 @@
     "@google/genai": "latest",
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "keytar": "^7.9.0",
     "lucide-react": "^0.475.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.3",

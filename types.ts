@@ -22,6 +22,8 @@ export interface User {
   avatarUrl?: string; // URL to profile picture
   activePlatforms: Platform[];
   role?: string; // e.g., "Frontend Dev", "PM"
+  lastMessageTime?: Date; // For sorting contacts by recent activity
+  alternateIds?: string[]; // For merged contacts (e.g., both wa-xxx and sig-xxx)
 }
 
 export interface Attachment {

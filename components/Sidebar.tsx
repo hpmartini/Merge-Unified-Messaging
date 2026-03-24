@@ -1,8 +1,27 @@
 
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Platform, Message } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
 import { GitBranch, Search, X, MessageSquare, Clock, Settings } from 'lucide-react';
+
+// Format relative time (e.g., "2m", "1h", "Yesterday", "Mar 12")
+const formatRelativeTime = (date: Date | undefined): string => {
+  if (!date) return '';
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'now';
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) {
+    return date.toLocaleDateString('de-DE', { weekday: 'short' });
+  }
+  return date.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
+};
 
 interface SidebarProps {
   users: User[];
@@ -25,12 +44,30 @@ const Sidebar: React.FC<SidebarProps> = ({
   onSearchResultClick,
   onOpenSettings
 }) => {
+  // Local input state for immediate UI feedback
+  const [inputValue, setInputValue] = useState(searchQuery);
+
+  // Debounce: update parent searchQuery after 150ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(inputValue);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [inputValue, setSearchQuery]);
+
+  // Sync local state if parent changes (e.g., clearing from outside)
+  useEffect(() => {
+    setInputValue(searchQuery);
+  }, [searchQuery]);
+
   const isSearching = searchQuery.trim().length > 0;
 
   // Filter users by name when searching
-  const filteredUsers = isSearching
-    ? users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : users;
+  const filteredUsers = useMemo(() => {
+    if (!isSearching) return users;
+    const query = searchQuery.toLowerCase();
+    return users.filter(u => u.name.toLowerCase().includes(query));
+  }, [users, searchQuery, isSearching]);
 
   const highlightText = (text: string, highlight: string) => {
     if (!highlight.trim()) return text;
@@ -64,14 +101,14 @@ const Sidebar: React.FC<SidebarProps> = ({
           <Search className={`absolute left-3 top-2.5 w-4 h-4 transition-colors ${isSearching ? 'text-blue-500' : 'text-theme-muted'}`} />
           <input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search all messages..."
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Search contacts & messages..."
             className="w-full bg-theme-base border border-theme rounded-md py-2 pl-9 pr-9 text-sm text-theme-main focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-slate-500 transition-all"
           />
-          {isSearching && (
+          {inputValue && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => { setInputValue(''); setSearchQuery(''); }}
               className="absolute right-3 top-2.5 text-theme-muted hover:text-theme-main transition-colors"
             >
               <X className="w-4 h-4" />
@@ -134,7 +171,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <div className="flex-1 min-w-0 md:hidden lg:block">
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-theme-main truncate text-sm">{user.name}</span>
-                        <span className="text-[10px] text-theme-muted font-mono">2m</span>
+                        {user.lastMessageTime && (
+                          <span className="text-[10px] text-theme-muted font-mono flex-shrink-0 ml-2">
+                            {formatRelativeTime(user.lastMessageTime)}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5 mt-1">
                         {user.activePlatforms.slice(0, 3).map(p => (

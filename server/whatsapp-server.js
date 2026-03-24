@@ -552,7 +552,7 @@ app.get('/api/sessions', (req, res) => {
 
 // Port discovery endpoint
 app.get('/api/port', (req, res) => {
-  res.json({ port: server.address().port });
+  res.json({ port: server.address().port, service: 'whatsapp' });
 });
 
 // Try ports starting from preferred, find first available
