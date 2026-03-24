@@ -199,11 +199,15 @@ async function downloadMedia(message, sessionId) {
   }
 }
 
-// Broadcast to specific session
+// Broadcast to all clients connected to a session
 function broadcastToSession(sessionId, data) {
-  const ws = wsConnections.get(sessionId);
-  if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify(data));
+  const clients = wsConnections.get(sessionId);
+  if (!clients || clients.size === 0) return;
+  const payload = JSON.stringify(data);
+  for (const ws of clients) {
+    if (ws.readyState === 1) {
+      ws.send(payload);
+    }
   }
 }
 
@@ -320,7 +324,10 @@ function setupWebSocket() {
   const sessionId = url.searchParams.get('sessionId') || 'default';
 
   console.log(`[${sessionId}] WebSocket connected`);
-  wsConnections.set(sessionId, ws);
+  if (!wsConnections.has(sessionId)) {
+    wsConnections.set(sessionId, new Set());
+  }
+  wsConnections.get(sessionId).add(ws);
 
   ws.on('message', async (data) => {
     try {
@@ -514,7 +521,13 @@ function setupWebSocket() {
 
   ws.on('close', () => {
     console.log(`[${sessionId}] WebSocket disconnected`);
-    wsConnections.delete(sessionId);
+    const clients = wsConnections.get(sessionId);
+    if (clients) {
+      clients.delete(ws);
+      if (clients.size === 0) {
+        wsConnections.delete(sessionId);
+      }
+    }
   });
   });
 }

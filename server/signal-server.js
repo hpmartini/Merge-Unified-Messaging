@@ -38,6 +38,7 @@ const signalProcesses = new Map();
 const wsConnections = new Map();
 const registrationState = new Map(); // Track registration in progress
 const cachedReadySessions = new Set(); // Sessions that got ready from cached data (don't send disconnected on process crash)
+const recentlySentTimestamps = new Map(); // Track recently sent message timestamps to suppress sync echo duplicates
 
 // JSON-RPC request ID counter
 let rpcIdCounter = 1;
@@ -266,16 +267,22 @@ function getMediaType(mimetype) {
   return 'document';
 }
 
-// Broadcast to specific session
+// Broadcast to all clients connected to a session
 function broadcastToSession(sessionId, data) {
-  const ws = wsConnections.get(sessionId);
-  console.log(`[${sessionId}] Broadcasting ${data.type}, ws exists: ${!!ws}, readyState: ${ws?.readyState}`);
-  if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify(data));
-    console.log(`[${sessionId}] Sent ${data.type} successfully`);
-  } else {
-    console.log(`[${sessionId}] Failed to send ${data.type} - no valid WebSocket`);
+  const clients = wsConnections.get(sessionId);
+  if (!clients || clients.size === 0) {
+    console.log(`[${sessionId}] Failed to send ${data.type} - no connected clients`);
+    return;
   }
+  const payload = JSON.stringify(data);
+  let sent = 0;
+  for (const ws of clients) {
+    if (ws.readyState === 1) {
+      ws.send(payload);
+      sent++;
+    }
+  }
+  console.log(`[${sessionId}] Broadcast ${data.type} to ${sent}/${clients.size} clients`);
 }
 
 // ============ SIGNAL-CLI PROCESS MANAGEMENT ============
@@ -425,6 +432,14 @@ function handleIncomingMessage(sessionId, params) {
     const hasAttachments = !!(sentDataMessage?.attachments?.length);
 
     if (chatId) {
+      // Check if this is a sync echo of a message we just sent — skip to avoid duplicates
+      const sentKey = `${sessionId}:${chatId}:${body}`;
+      if (recentlySentTimestamps.has(sentKey)) {
+        console.log(`[${sessionId}] Skipping sync echo for recently sent message to ${chatId}`);
+        recentlySentTimestamps.delete(sentKey);
+        return;
+      }
+
       const msgData = {
         id: `${sentTimestamp}_${chatId}_sent`,
         from: 'me',
@@ -687,7 +702,10 @@ function setupWebSocket() {
   const sessionId = url.searchParams.get('sessionId') || 'default';
 
   console.log(`[${sessionId}] WebSocket connected`);
-  wsConnections.set(sessionId, ws);
+  if (!wsConnections.has(sessionId)) {
+    wsConnections.set(sessionId, new Set());
+  }
+  wsConnections.get(sessionId).add(ws);
 
   ws.on('message', async (data) => {
     try {
@@ -819,10 +837,16 @@ function setupWebSocket() {
           const procData = signalProcesses.get(sessionId);
           if (procData) {
             try {
-              await sendJsonRpc(procData.process, 'send', {
+              const sendResult = await sendJsonRpc(procData.process, 'send', {
                 recipient: [msg.to],
                 message: msg.body
               });
+
+              // Track this sent message to suppress the sync echo duplicate
+              const sentKey = `${sessionId}:${msg.to}:${msg.body}`;
+              recentlySentTimestamps.set(sentKey, Date.now());
+              // Auto-clean after 30 seconds
+              setTimeout(() => recentlySentTimestamps.delete(sentKey), 30000);
 
               // Save sent message to cache
               const sentMessage = {
@@ -853,6 +877,9 @@ function setupWebSocket() {
             } catch (err) {
               broadcastToSession(sessionId, { type: 'error', message: err.message });
             }
+          } else {
+            console.log(`[${sessionId}] Cannot send: no signal-cli process running`);
+            broadcastToSession(sessionId, { type: 'error', message: 'Signal process not running. Cannot send messages.' });
           }
           break;
 
@@ -1005,7 +1032,13 @@ function setupWebSocket() {
 
   ws.on('close', () => {
     console.log(`[${sessionId}] WebSocket disconnected`);
-    wsConnections.delete(sessionId);
+    const clients = wsConnections.get(sessionId);
+    if (clients) {
+      clients.delete(ws);
+      if (clients.size === 0) {
+        wsConnections.delete(sessionId);
+      }
+    }
   });
   });
 }
