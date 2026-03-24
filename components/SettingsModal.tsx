@@ -23,6 +23,7 @@ interface SignalHook {
   status: 'disconnected' | 'connecting' | 'need_setup' | 'linking' | 'verification_needed' | 'ready' | 'error';
   linkUri: string | null;
   user: { id: string; name: string; phone: string } | null;
+  chats: { id: string; name: string }[];
   error: string | null;
   connect: (phoneNumber?: string) => void;
   disconnect: () => void;
@@ -50,7 +51,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [connectedAccounts, setConnectedAccounts] = useState<Record<string, boolean>>({
     [Platform.Mail]: false,
     [Platform.WhatsApp]: whatsapp.status === 'ready',
-    [Platform.Signal]: signal.status === 'ready',
+    [Platform.Signal]: signal.status === 'ready' || signal.chats.length > 0,
   });
 
   // Add Account Flow State
@@ -75,9 +76,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [whatsapp.status, whatsapp.user, addAccountStep, selectedPlatformToAdd]);
 
-  // Sync Signal connection status
+  // Sync Signal connection status — also consider cached chats as "connected"
   useEffect(() => {
-    if (signal.status === 'ready' && signal.user) {
+    if ((signal.status === 'ready' && signal.user) || signal.chats.length > 0) {
       setConnectedAccounts(prev => ({ ...prev, [Platform.Signal]: true }));
       // Return to list after successful connection
       if (addAccountStep === 'qr' && selectedPlatformToAdd === Platform.Signal) {
@@ -86,10 +87,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           setSelectedPlatformToAdd(null);
         }, 1500);
       }
-    } else if (signal.status === 'disconnected') {
+    } else if (signal.status === 'disconnected' && signal.chats.length === 0) {
       setConnectedAccounts(prev => ({ ...prev, [Platform.Signal]: false }));
     }
-  }, [signal.status, signal.user, addAccountStep, selectedPlatformToAdd]);
+  }, [signal.status, signal.user, signal.chats.length, addAccountStep, selectedPlatformToAdd]);
 
   if (!isOpen) return null;
 

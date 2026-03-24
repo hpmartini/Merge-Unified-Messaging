@@ -403,16 +403,16 @@ const App: React.FC = () => {
       ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
     ];
 
-    // Load Signal messages
-    if (signal.status === 'ready') {
-      console.log('[App] Signal IDs to load:', signalIds);
+    // Load Signal messages — also load when chats are available (cached data)
+    if (signal.status === 'ready' || signal.chats.length > 0) {
+      console.log('[App] Signal IDs to load:', signalIds, 'status:', signal.status);
       for (const sigId of signalIds) {
         const chatId = sigId.replace('sig-', '');
         console.log('[App] Requesting Signal messages for:', chatId);
         signal.getMessages(chatId, 100);
       }
     }
-  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, whatsapp.getMessages, signal.getMessages]);
+  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, signal.chats.length, whatsapp.getMessages, signal.getMessages]);
 
   // Preload messages for all chats when platforms become ready
   const hasPreloadedWA = useRef(false);
@@ -430,7 +430,7 @@ const App: React.FC = () => {
   }, [whatsapp.status, whatsapp.chats, whatsapp.getMessages]);
 
   useEffect(() => {
-    if (signal.status === 'ready' && signal.chats.length > 0 && !hasPreloadedSignal.current) {
+    if ((signal.status === 'ready' || signal.chats.length > 0) && signal.chats.length > 0 && !hasPreloadedSignal.current) {
       hasPreloadedSignal.current = true;
       console.log('[App] Preloading Signal messages for', signal.chats.length, 'chats');
       for (const chat of signal.chats.slice(0, 20)) {

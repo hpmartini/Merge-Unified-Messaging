@@ -37,6 +37,7 @@ let wss;
 const signalProcesses = new Map();
 const wsConnections = new Map();
 const registrationState = new Map(); // Track registration in progress
+const cachedReadySessions = new Set(); // Sessions that got ready from cached data (don't send disconnected on process crash)
 
 // JSON-RPC request ID counter
 let rpcIdCounter = 1;
@@ -500,7 +501,12 @@ async function createSignalProcess(sessionId, phoneNumber) {
   proc.on('close', (code) => {
     console.log(`[${sessionId}] Signal process exited with code ${code}`);
     signalProcesses.delete(sessionId);
-    broadcastToSession(sessionId, { type: 'disconnected', reason: `Process exited with code ${code}` });
+    // Don't broadcast disconnected if we already sent ready from cached data
+    if (cachedReadySessions.has(sessionId)) {
+      console.log(`[${sessionId}] Process crashed but cached-ready active, not sending disconnected`);
+    } else {
+      broadcastToSession(sessionId, { type: 'disconnected', reason: `Process exited with code ${code}` });
+    }
   });
 
   signalProcesses.set(sessionId, { process: proc, phoneNumber });
@@ -705,24 +711,27 @@ function setupWebSocket() {
             // Check if there's a linked account in config
             const linkedPhone = getLinkedAccount(sessionId);
             if (linkedPhone) {
-              // Auto-start the Signal process for the linked account
-              console.log(`[${sessionId}] Found linked account ${linkedPhone}, starting process...`);
+              // Send ready IMMEDIATELY with cached user info so the client
+              // can load contacts even if signal-cli fails to start
+              console.log(`[${sessionId}] Found linked account ${linkedPhone}, sending ready first...`);
+              cachedReadySessions.add(sessionId);
+              broadcastToSession(sessionId, {
+                type: 'ready',
+                user: {
+                  id: linkedPhone,
+                  name: linkedPhone,
+                  phone: linkedPhone
+                }
+              });
+
+              // Try to start signal-cli in background — failure is non-fatal
               try {
                 await createSignalProcess(sessionId, linkedPhone);
-                broadcastToSession(sessionId, {
-                  type: 'ready',
-                  user: {
-                    id: linkedPhone,
-                    name: linkedPhone,
-                    phone: linkedPhone
-                  }
-                });
+                // signal-cli started successfully, no longer just cached
+                cachedReadySessions.delete(sessionId);
               } catch (err) {
-                console.error(`[${sessionId}] Error starting process for linked account:`, err);
-                broadcastToSession(sessionId, {
-                  type: 'error',
-                  message: `Failed to reconnect: ${err.message}`
-                });
+                console.error(`[${sessionId}] signal-cli failed (non-fatal, using cached data):`, err.message);
+                // Do NOT send 'disconnected' or 'error' — client already has 'ready' status
               }
             } else {
               // Need to link/register

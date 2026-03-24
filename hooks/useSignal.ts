@@ -108,6 +108,7 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
 
   const wsRef = useRef<WebSocket | null>(null);
   const optionsRef = useRef(options);
+  const hasCachedDataRef = useRef(false);
 
   useEffect(() => {
     optionsRef.current = options;
@@ -185,8 +186,13 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               break;
 
             case 'disconnected':
-              setStatus('disconnected');
-              setUser(null);
+              // Don't override ready status if we have cached data loaded
+              if (hasCachedDataRef.current) {
+                console.log('[Signal] Ignoring disconnected — cached data is loaded');
+              } else {
+                setStatus('disconnected');
+                setUser(null);
+              }
               break;
 
             case 'not_registered':
@@ -199,6 +205,9 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               break;
 
             case 'chats':
+              if (data.chats && data.chats.length > 0) {
+                hasCachedDataRef.current = true;
+              }
               setChats(prev => {
                 if (data.cached && prev.length > 0) {
                   return prev;
@@ -211,7 +220,7 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               break;
 
             case 'cachedDataLoaded':
-              console.log('[Signal] Cached data loaded');
+              console.log('[Signal] Cached data loaded, hasCachedData:', hasCachedDataRef.current);
               break;
 
             case 'messages':
@@ -271,8 +280,10 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
       };
 
       ws.onclose = () => {
-        console.log('[Signal] WebSocket closed');
-        setStatus('disconnected');
+        console.log('[Signal] WebSocket closed, hasCachedData:', hasCachedDataRef.current);
+        if (!hasCachedDataRef.current) {
+          setStatus('disconnected');
+        }
       };
 
       wsRef.current = ws;
