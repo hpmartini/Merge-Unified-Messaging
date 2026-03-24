@@ -13,7 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data-signal');
 const AVATARS_DIR = join(DATA_DIR, 'avatars');
 const MEDIA_DIR = join(DATA_DIR, 'media');
-const SIGNAL_CLI_PATH = join(__dirname, 'signal-cli', 'signal-cli-0.13.2', 'bin', 'signal-cli');
+const SIGNAL_CLI_PATH = join(__dirname, 'signal-cli', 'signal-cli-0.13.24', 'bin', 'signal-cli');
 const SIGNAL_CONFIG_DIR = join(__dirname, 'signal-config');
 
 // Ensure data directories exist

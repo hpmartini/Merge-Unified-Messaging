@@ -639,16 +639,26 @@ const App: React.FC = () => {
       attachments: attachments || [],
     };
 
-    // Send via WhatsApp if it's a WhatsApp contact and platform is WhatsApp
-    if (selectedUser.id.startsWith('wa-') && platform === Platform.WhatsApp && whatsapp.status === 'ready') {
-      const chatId = selectedUser.id.replace('wa-', '') + '@c.us';
-      whatsapp.sendMessage(chatId, content);
+    // Send via WhatsApp if platform is WhatsApp — check primary and alternate IDs
+    if (platform === Platform.WhatsApp && whatsapp.status === 'ready') {
+      const waId = selectedUser.id.startsWith('wa-')
+        ? selectedUser.id
+        : selectedUser.alternateIds?.find(id => id.startsWith('wa-'));
+      if (waId) {
+        const chatId = waId.replace('wa-', '') + '@c.us';
+        whatsapp.sendMessage(chatId, content);
+      }
     }
 
-    // Send via Signal if it's a Signal contact and platform is Signal
-    if (selectedUser.id.startsWith('sig-') && platform === Platform.Signal && signal.status === 'ready') {
-      const chatId = selectedUser.id.replace('sig-', '');
-      signal.sendMessage(chatId, content);
+    // Send via Signal if platform is Signal — check primary and alternate IDs
+    if (platform === Platform.Signal && (signal.status === 'ready' || signal.chats.length > 0)) {
+      const sigId = selectedUser.id.startsWith('sig-')
+        ? selectedUser.id
+        : selectedUser.alternateIds?.find(id => id.startsWith('sig-'));
+      if (sigId) {
+        const chatId = sigId.replace('sig-', '');
+        signal.sendMessage(chatId, content);
+      }
     }
 
     setMessages([...messages, newMessage]);
