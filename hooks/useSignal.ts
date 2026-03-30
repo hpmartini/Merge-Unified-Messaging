@@ -109,6 +109,8 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
   const wsRef = useRef<WebSocket | null>(null);
   const optionsRef = useRef(options);
   const hasCachedDataRef = useRef(false);
+  const mountedRef = useRef(true);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     optionsRef.current = options;
@@ -208,12 +210,7 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               if (data.chats && data.chats.length > 0) {
                 hasCachedDataRef.current = true;
               }
-              setChats(prev => {
-                if (data.cached && prev.length > 0) {
-                  return prev;
-                }
-                return data.chats;
-              });
+              setChats(data.chats);
               if (optionsRef.current.onChatsLoaded) {
                 optionsRef.current.onChatsLoaded(data.chats);
               }
@@ -227,13 +224,9 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               setMessages(prev => {
                 const newMap = new Map(prev);
                 const existing = newMap.get(data.chatId) || [];
-
-                if (data.cached && existing.length > 0) {
-                  return prev;
-                }
-
                 const existingIds = new Set(existing.map(m => m.id));
                 const newMessages = data.messages.filter((m: SignalMessage) => !existingIds.has(m.id));
+                if (newMessages.length === 0) return prev;
                 newMap.set(data.chatId, [...existing, ...newMessages]);
                 return newMap;
               });
@@ -259,6 +252,8 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               setMessages(prev => {
                 const newMap = new Map(prev);
                 const chatMessages = newMap.get(msg.chatId) || [];
+                // Deduplicate by message ID
+                if (chatMessages.some(m => m.id === msg.id)) return prev;
                 newMap.set(msg.chatId, [...chatMessages, msg]);
                 return newMap;
               });
@@ -279,10 +274,20 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
         setError('Connection error - is the Signal server running?');
       };
 
-      ws.onclose = () => {
-        console.log('[Signal] WebSocket closed, hasCachedData:', hasCachedDataRef.current);
+      ws.onclose = (event) => {
+        console.log('[Signal] WebSocket closed, hasCachedData:', hasCachedDataRef.current, 'code:', event.code);
         if (!hasCachedDataRef.current) {
           setStatus('disconnected');
+        }
+        // Auto-reconnect if connection was lost unexpectedly and component is still mounted
+        if (mountedRef.current && event.code !== 1000) {
+          console.log('[Signal] Unexpected close, auto-reconnecting in 2s...');
+          reconnectTimerRef.current = setTimeout(() => {
+            if (mountedRef.current && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
+              console.log('[Signal] Auto-reconnecting...');
+              connect();
+            }
+          }, 2000);
         }
       };
 
@@ -355,7 +360,12 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
       if (wsRef.current) {
         wsRef.current.close();
       }

@@ -99,6 +99,7 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const optionsRef = useRef(options);
+  const mountedRef = useRef(true);
 
   // Keep options ref updated
   useEffect(() => {
@@ -195,21 +196,12 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
               break;
 
             case 'messages':
-              console.log('[WhatsApp] Received messages - chatId:', data.chatId, 'count:', data.messages?.length, 'cached:', data.cached);
               setMessages(prev => {
                 const newMap = new Map(prev);
                 const existing = newMap.get(data.chatId) || [];
-
-                // If cached and we already have fresh data, skip
-                if (data.cached && existing.length > 0) {
-                  console.log('[WhatsApp] Skipping cached messages, already have fresh data');
-                  return prev;
-                }
-
-                // Merge messages, avoiding duplicates
                 const existingIds = new Set(existing.map(m => m.id));
                 const newMessages = data.messages.filter((m: WhatsAppMessage) => !existingIds.has(m.id));
-                console.log('[WhatsApp] Adding', newMessages.length, 'new messages to state');
+                if (newMessages.length === 0) return prev;
                 newMap.set(data.chatId, [...existing, ...newMessages]);
                 return newMap;
               });
@@ -236,10 +228,12 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
                 media: data.message.media
               };
 
-              // Add to messages state
+              // Add to messages state (with deduplication)
               setMessages(prev => {
                 const newMap = new Map(prev);
                 const chatMessages = newMap.get(msg.chatId) || [];
+                // Deduplicate by message ID
+                if (chatMessages.some(m => m.id === msg.id)) return prev;
                 newMap.set(msg.chatId, [...chatMessages, msg]);
                 return newMap;
               });
@@ -260,9 +254,19 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
         setError('Connection error - is the WhatsApp server running?');
       };
 
-      ws.onclose = () => {
-        console.log('[WhatsApp] WebSocket closed');
+      ws.onclose = (event) => {
+        console.log('[WhatsApp] WebSocket closed, code:', event.code);
         setStatus('disconnected');
+        // Auto-reconnect if connection was lost unexpectedly
+        if (mountedRef.current && event.code !== 1000) {
+          console.log('[WhatsApp] Unexpected close, auto-reconnecting in 2s...');
+          reconnectTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current && (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED)) {
+              console.log('[WhatsApp] Auto-reconnecting...');
+              connect();
+            }
+          }, 2000);
+        }
       };
 
       wsRef.current = ws;
@@ -319,7 +323,9 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
 
   // Cleanup on unmount
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }

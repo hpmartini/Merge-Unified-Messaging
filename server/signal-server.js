@@ -40,6 +40,8 @@ const registrationState = new Map(); // Track registration in progress
 const cachedReadySessions = new Set(); // Sessions that got ready from cached data (don't send disconnected on process crash)
 const recentlySentTimestamps = new Map(); // Track recently sent message timestamps to suppress sync echo duplicates
 
+let serverShuttingDown = false;
+
 // JSON-RPC request ID counter
 let rpcIdCounter = 1;
 const pendingRequests = new Map();
@@ -348,6 +350,15 @@ function handleIncomingMessage(sessionId, params) {
 
   const { source, sourceNumber, sourceName, timestamp, dataMessage, syncMessage, contactsMessage, typingMessage } = envelope;
 
+  // Detailed logging for debugging real-time message delivery
+  const msgTypes = [];
+  if (dataMessage) msgTypes.push('dataMessage');
+  if (syncMessage) msgTypes.push('syncMessage');
+  if (contactsMessage) msgTypes.push('contactsMessage');
+  if (typingMessage) msgTypes.push('typingMessage');
+  if (envelope.receiptMessage) msgTypes.push('receiptMessage');
+  console.log(`[${sessionId}] handleIncomingMessage: from=${sourceNumber || source}, types=[${msgTypes.join(',')}]`);
+
   // Handle contacts sync
   if (contactsMessage) {
     console.log(`[${sessionId}] Received contacts sync`);
@@ -406,12 +417,13 @@ function handleIncomingMessage(sessionId, params) {
       timestamp: msgData.timestamp
     });
 
+    console.log(`[${sessionId}] Broadcasting incoming dataMessage: from=${chatId}, body="${msgData.body?.substring(0, 50)}"`);
     broadcastToSession(sessionId, { type: 'message', message: msgData });
   }
 
   // Handle sync messages (messages sent from our other devices)
   if (syncMessage) {
-    console.log(`[${sessionId}] Received sync message:`, JSON.stringify(syncMessage).substring(0, 500));
+    console.log(`[${sessionId}] Received sync message keys:`, Object.keys(syncMessage), JSON.stringify(syncMessage).substring(0, 500));
 
     // Handle contacts sync within sync message
     if (syncMessage.contacts) {
@@ -466,6 +478,7 @@ function handleIncomingMessage(sessionId, params) {
         timestamp: msgData.timestamp
       });
 
+      console.log(`[${sessionId}] Broadcasting sync sentMessage: to=${chatId}, body="${body?.substring(0, 50)}"`);
       broadcastToSession(sessionId, { type: 'message', message: msgData });
     }
   }
@@ -519,6 +532,24 @@ async function createSignalProcess(sessionId, phoneNumber) {
     // Don't broadcast disconnected if we already sent ready from cached data
     if (cachedReadySessions.has(sessionId)) {
       console.log(`[${sessionId}] Process crashed but cached-ready active, not sending disconnected`);
+      // Auto-restart signal-cli after a delay to maintain real-time message delivery
+      if (!serverShuttingDown) {
+        const restartDelay = 5000;
+        console.log(`[${sessionId}] Auto-restarting signal-cli in ${restartDelay / 1000}s...`);
+        setTimeout(async () => {
+          if (serverShuttingDown) return;
+          if (signalProcesses.has(sessionId)) {
+            console.log(`[${sessionId}] Signal process already running, skip restart`);
+            return;
+          }
+          try {
+            await createSignalProcess(sessionId, phoneNumber);
+            console.log(`[${sessionId}] Signal process auto-restarted successfully`);
+          } catch (err) {
+            console.error(`[${sessionId}] Failed to auto-restart signal-cli:`, err.message);
+          }
+        }, restartDelay);
+      }
     } else {
       broadcastToSession(sessionId, { type: 'disconnected', reason: `Process exited with code ${code}` });
     }
@@ -848,13 +879,14 @@ function setupWebSocket() {
               // Auto-clean after 30 seconds
               setTimeout(() => recentlySentTimestamps.delete(sentKey), 30000);
 
-              // Save sent message to cache
+              // Save sent message to cache — use client's messageId for cross-tab ID consistency
+              const sentTs = msg.messageId || Date.now().toString();
               const sentMessage = {
-                id: `${Date.now()}_${msg.to}_sent`,
-                from: 'me',
+                id: `${sentTs}_${msg.to}_sent`,
+                from: msg.to,
                 to: msg.to,
                 body: msg.body,
-                timestamp: Math.floor(Date.now() / 1000),
+                timestamp: Math.floor(parseInt(sentTs) / 1000),
                 fromMe: true,
                 contactName: 'Me',
                 chatName: msg.to,
@@ -873,6 +905,8 @@ function setupWebSocket() {
                 saveData(sessionId, 'chats', chats);
               }
 
+              // Broadcast the full sent message to ALL connected clients for cross-tab sync
+              broadcastToSession(sessionId, { type: 'message', message: sentMessage });
               broadcastToSession(sessionId, { type: 'sent', messageId: msg.messageId });
             } catch (err) {
               broadcastToSession(sessionId, { type: 'error', message: err.message });
@@ -1141,5 +1175,24 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+// Graceful shutdown: kill all child signal-cli processes
+function cleanupAndExit() {
+  if (serverShuttingDown) return;
+  serverShuttingDown = true;
+  console.log('Signal server shutting down, killing child processes...');
+  for (const [sessionId, procData] of signalProcesses) {
+    try {
+      console.log(`[${sessionId}] Killing signal-cli process...`);
+      procData.process.kill('SIGTERM');
+    } catch (e) {
+      // Process already dead
+    }
+  }
+  setTimeout(() => process.exit(0), 2000);
+}
+
+process.on('SIGTERM', cleanupAndExit);
+process.on('SIGINT', cleanupAndExit);
 
 startServer();

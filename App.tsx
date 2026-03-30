@@ -74,48 +74,96 @@ const App: React.FC = () => {
   const serverPortRef = useRef<number | null>(null);
 
   const handleWhatsAppChatsLoaded = useCallback((chats: WhatsAppChat[]) => {
-    // Convert WhatsApp chats to Users
-    const waUsers: User[] = chats
-      .filter(chat => !chat.isGroup) // Only individual chats for now
-      .map(chat => {
-        // Construct avatar URL if available
-        let avatarUrl: string | undefined;
-        if (chat.avatarUrl && serverPortRef.current) {
-          avatarUrl = `http://localhost:${serverPortRef.current}${chat.avatarUrl}`;
-        }
+    // Convert WhatsApp chats to Users, deduplicating by name
+    // (WhatsApp can have multiple chat entries for the same contact, e.g. @c.us and @lid)
+    const waUserMap = new Map<string, User>();
+    for (const chat of chats) {
+      if (chat.isGroup) continue;
 
-        return {
-          id: `wa-${chat.id.replace('@c.us', '')}`,
+      const normalizedName = normalizeName(chat.name);
+      const chatIdClean = chat.id.replace('@c.us', '').replace('@lid', '');
+      const waId = `wa-${chatIdClean}`;
+
+      let avatarUrl: string | undefined;
+      if (chat.avatarUrl && serverPortRef.current) {
+        avatarUrl = `http://localhost:${serverPortRef.current}${chat.avatarUrl}`;
+      }
+
+      const chatTime = chat.timestamp ? new Date(chat.timestamp * 1000) : undefined;
+
+      const existing = waUserMap.get(normalizedName);
+      if (existing) {
+        // Merge: keep the most recent entry, collect alternate IDs
+        const existingIsNewer = existing.lastMessageTime && chatTime && existing.lastMessageTime > chatTime;
+        waUserMap.set(normalizedName, {
+          ...existing,
+          avatarUrl: existing.avatarUrl || avatarUrl,
+          alternateIds: [...(existing.alternateIds || []), waId],
+          lastMessageTime: existingIsNewer ? existing.lastMessageTime : (chatTime || existing.lastMessageTime)
+        });
+      } else {
+        waUserMap.set(normalizedName, {
+          id: waId,
           name: chat.name,
           avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
           avatarUrl,
           activePlatforms: [Platform.WhatsApp],
           role: 'WhatsApp Contact',
-          lastMessageTime: chat.timestamp ? new Date(chat.timestamp * 1000) : undefined
-        };
-      });
+          lastMessageTime: chatTime
+        });
+      }
+    }
+    const waUsers: User[] = Array.from(waUserMap.values());
 
     setUsers(prev => {
-      // Merge with existing users, update avatar URLs for existing ones
-      const existingIds = new Set(prev.map(u => u.id));
-      const newUsers = waUsers.filter(u => !existingIds.has(u.id));
+      // Merge WhatsApp users with existing users by ID, alternateIds, or name
+      const mergedUsers = [...prev];
+      const addedWaUsers: User[] = [];
 
-      // Update avatars and timestamps for existing WhatsApp users
-      const updatedPrev = prev.map(u => {
-        const waUser = waUsers.find(wa => wa.id === u.id);
-        if (waUser) {
-          return {
-            ...u,
-            avatarUrl: u.avatarUrl || waUser.avatarUrl,
-            lastMessageTime: waUser.lastMessageTime && (!u.lastMessageTime || waUser.lastMessageTime > u.lastMessageTime)
+      for (const waUser of waUsers) {
+        // Check by exact ID match OR alternateIds match
+        const existingByIdIdx = mergedUsers.findIndex(u =>
+          u.id === waUser.id || (u.alternateIds || []).includes(waUser.id)
+        );
+        if (existingByIdIdx !== -1) {
+          // Update existing user (already has this WhatsApp entry)
+          const existing = mergedUsers[existingByIdIdx];
+          mergedUsers[existingByIdIdx] = {
+            ...existing,
+            avatarUrl: existing.avatarUrl || waUser.avatarUrl,
+            lastMessageTime: waUser.lastMessageTime && (!existing.lastMessageTime || waUser.lastMessageTime > existing.lastMessageTime)
               ? waUser.lastMessageTime
-              : u.lastMessageTime
+              : existing.lastMessageTime
           };
+          continue;
         }
-        return u;
-      });
 
-      return [...updatedPrev, ...newUsers];
+        // Then check by name match (for cross-platform merge)
+        const normalizedWaName = normalizeName(waUser.name);
+        const existingByNameIdx = mergedUsers.findIndex(u => normalizeName(u.name) === normalizedWaName);
+
+        if (existingByNameIdx !== -1) {
+          // Merge: add WhatsApp platform to existing user (e.g. Signal contact)
+          const existing = mergedUsers[existingByNameIdx];
+          if (!existing.activePlatforms.includes(Platform.WhatsApp)) {
+            mergedUsers[existingByNameIdx] = {
+              ...existing,
+              activePlatforms: [...existing.activePlatforms, Platform.WhatsApp],
+              avatarUrl: existing.avatarUrl || waUser.avatarUrl,
+              role: 'Contact',
+              alternateIds: [...(existing.alternateIds || []), waUser.id],
+              lastMessageTime: waUser.lastMessageTime && (!existing.lastMessageTime || waUser.lastMessageTime > existing.lastMessageTime)
+                ? waUser.lastMessageTime
+                : existing.lastMessageTime
+            };
+          }
+        } else {
+          // No match, add as new user
+          addedWaUsers.push(waUser);
+        }
+      }
+
+      return [...mergedUsers, ...addedWaUsers];
     });
   }, []);
 
@@ -264,13 +312,30 @@ const App: React.FC = () => {
       });
 
     setUsers(prev => {
-      // Try to merge Signal users with existing users by name
+      // Try to merge Signal users with existing users by ID, alternateIds, or name
       const mergedUsers = [...prev];
       const addedSignalUsers: User[] = [];
 
       for (const sigUser of sigUsers) {
+        // First check by exact ID or alternateIds match
+        const existingByIdIdx = mergedUsers.findIndex(u =>
+          u.id === sigUser.id || (u.alternateIds || []).includes(sigUser.id)
+        );
+        if (existingByIdIdx !== -1) {
+          // Already exists - update metadata
+          const existing = mergedUsers[existingByIdIdx];
+          mergedUsers[existingByIdIdx] = {
+            ...existing,
+            avatarUrl: existing.avatarUrl || sigUser.avatarUrl,
+            lastMessageTime: sigUser.lastMessageTime && (!existing.lastMessageTime || sigUser.lastMessageTime > existing.lastMessageTime)
+              ? sigUser.lastMessageTime
+              : existing.lastMessageTime
+          };
+          continue;
+        }
+
+        // Then check by name match (case-insensitive)
         const normalizedSigName = normalizeName(sigUser.name);
-        // Find existing user with same name (case-insensitive)
         const existingIdx = mergedUsers.findIndex(u => normalizeName(u.name) === normalizedSigName);
 
         if (existingIdx !== -1) {
@@ -332,7 +397,20 @@ const App: React.FC = () => {
 
     setMessages(prev => {
       const existingIds = new Set(prev.map(m => m.id));
-      const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      // Also build a set of content+timestamp fingerprints to catch duplicates with different IDs
+      const existingFingerprints = new Set(
+        prev.filter(m => m.platform === Platform.Signal).map(m =>
+          `${m.content}|${m.isMe}|${Math.floor(m.timestamp.getTime() / 5000)}`
+        )
+      );
+      const uniqueNew = newMessages.filter(m => {
+        if (existingIds.has(m.id)) return false;
+        // Check fingerprint (content + isMe + timestamp within 5s window)
+        const fp = `${m.content}|${m.isMe}|${Math.floor(m.timestamp.getTime() / 5000)}`;
+        if (existingFingerprints.has(fp)) return false;
+        return true;
+      });
+      if (uniqueNew.length === 0) return prev;
       return [...prev, ...uniqueNew];
     });
   }, []);
@@ -438,6 +516,34 @@ const App: React.FC = () => {
       }
     }
   }, [signal.status, signal.chats, signal.getMessages]);
+
+  // Periodic refresh: re-fetch messages for the active chat every 30s to catch missed real-time updates
+  useEffect(() => {
+    if (!selectedUser) return;
+    const interval = setInterval(() => {
+      // Refresh Signal messages for active user
+      const signalIds = [
+        ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
+        ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
+      ];
+      if ((signal.status === 'ready' || signal.chats.length > 0) && signalIds.length > 0) {
+        for (const sigId of signalIds) {
+          signal.getMessages(sigId.replace('sig-', ''), 100);
+        }
+      }
+      // Refresh WhatsApp messages for active user
+      const waIds = [
+        ...(selectedUser.id.startsWith('wa-') ? [selectedUser.id] : []),
+        ...(selectedUser.alternateIds?.filter(id => id.startsWith('wa-')) || [])
+      ];
+      if (whatsapp.status === 'ready' && waIds.length > 0) {
+        for (const waId of waIds) {
+          whatsapp.getMessages(waId.replace('wa-', '') + '@c.us', 100);
+        }
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [selectedUser?.id, selectedUser?.alternateIds, signal.status, signal.chats.length, whatsapp.status, signal.getMessages, whatsapp.getMessages]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -625,12 +731,33 @@ const App: React.FC = () => {
   const handleSendMessage = (content: string, platform: Platform, attachments?: Attachment[]) => {
     if (!selectedUser) return;
 
+    const now = Date.now();
+
+    // Determine the target chat ID for consistent message ID generation
+    let targetChatId = '';
+    if (platform === Platform.Signal) {
+      const sigId = selectedUser.id.startsWith('sig-')
+        ? selectedUser.id
+        : selectedUser.alternateIds?.find(id => id.startsWith('sig-'));
+      if (sigId) targetChatId = sigId.replace('sig-', '');
+    } else if (platform === Platform.WhatsApp) {
+      const waId = selectedUser.id.startsWith('wa-')
+        ? selectedUser.id
+        : selectedUser.alternateIds?.find(id => id.startsWith('wa-'));
+      if (waId) targetChatId = waId.replace('wa-', '');
+    }
+
+    // Use an ID format that matches what the server will generate for sent messages
+    const msgId = targetChatId
+      ? (platform === Platform.Signal ? `sig-${now}_${targetChatId}_sent` : `wa-${now}_${targetChatId}_sent`)
+      : now.toString();
+
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: msgId,
       userId: selectedUser.id,
       platform,
       content,
-      timestamp: new Date(),
+      timestamp: new Date(now),
       isMe: true,
       hash: Math.random().toString(16).substring(2, 9),
       replyToId: replyingTo?.id,
@@ -639,26 +766,14 @@ const App: React.FC = () => {
       attachments: attachments || [],
     };
 
-    // Send via WhatsApp if platform is WhatsApp — check primary and alternate IDs
-    if (platform === Platform.WhatsApp && whatsapp.status === 'ready') {
-      const waId = selectedUser.id.startsWith('wa-')
-        ? selectedUser.id
-        : selectedUser.alternateIds?.find(id => id.startsWith('wa-'));
-      if (waId) {
-        const chatId = waId.replace('wa-', '') + '@c.us';
-        whatsapp.sendMessage(chatId, content);
-      }
+    // Send via WhatsApp if platform is WhatsApp
+    if (platform === Platform.WhatsApp && whatsapp.status === 'ready' && targetChatId) {
+      whatsapp.sendMessage(targetChatId + '@c.us', content);
     }
 
-    // Send via Signal if platform is Signal — check primary and alternate IDs
-    if (platform === Platform.Signal && (signal.status === 'ready' || signal.chats.length > 0)) {
-      const sigId = selectedUser.id.startsWith('sig-')
-        ? selectedUser.id
-        : selectedUser.alternateIds?.find(id => id.startsWith('sig-'));
-      if (sigId) {
-        const chatId = sigId.replace('sig-', '');
-        signal.sendMessage(chatId, content);
-      }
+    // Send via Signal if platform is Signal
+    if (platform === Platform.Signal && (signal.status === 'ready' || signal.chats.length > 0) && targetChatId) {
+      signal.sendMessage(targetChatId, content);
     }
 
     setMessages([...messages, newMessage]);

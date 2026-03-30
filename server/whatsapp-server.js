@@ -32,6 +32,54 @@ let wss;
 // Store active WhatsApp clients per session
 const clients = new Map();
 const wsConnections = new Map();
+const clientInitializing = new Map(); // Track if a client is currently being initialized
+
+// Helper to check if an error is a detached frame error (needs client restart)
+function isDetachedFrameError(err) {
+  return err && err.message && (
+    err.message.includes('detached Frame') ||
+    err.message.includes('Execution context was destroyed') ||
+    err.message.includes('Protocol error') ||
+    err.message.includes('Session closed')
+  );
+}
+
+// Reinitialize a crashed WhatsApp client
+async function reinitializeClient(sessionId) {
+  if (clientInitializing.get(sessionId)) {
+    console.log(`[${sessionId}] Client already reinitializing, skipping`);
+    return null;
+  }
+  clientInitializing.set(sessionId, true);
+  try {
+    console.log(`[${sessionId}] Reinitializing WhatsApp client after crash...`);
+    const oldClient = clients.get(sessionId);
+    if (oldClient) {
+      // Try graceful destroy first, then force-kill the browser process
+      try { await oldClient.destroy(); } catch (e) {
+        console.log(`[${sessionId}] Graceful destroy failed, force-killing browser...`);
+        try {
+          if (oldClient.pupBrowser) {
+            const proc = oldClient.pupBrowser.process();
+            if (proc) proc.kill('SIGKILL');
+          }
+        } catch (killErr) { /* ignore */ }
+      }
+      clients.delete(sessionId);
+      // Give the OS time to release the lock file
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    const newClient = createWhatsAppClient(sessionId);
+    await newClient.initialize();
+    console.log(`[${sessionId}] Client reinitialized successfully`);
+    return newClient;
+  } catch (err) {
+    console.error(`[${sessionId}] Failed to reinitialize client:`, err.message);
+    return null;
+  } finally {
+    clientInitializing.set(sessionId, false);
+  }
+}
 
 // ============ DATA PERSISTENCE ============
 
@@ -265,6 +313,11 @@ function createWhatsAppClient(sessionId) {
     clients.delete(sessionId);
   });
 
+  // Handle client errors (e.g. detached frame) - attempt recovery
+  client.on('change_state', (state) => {
+    console.log(`[${sessionId}] Client state changed:`, state);
+  });
+
   client.on('message', async (message) => {
     console.log(`[${sessionId}] New message from ${message.from}`);
 
@@ -342,15 +395,34 @@ function setupWebSocket() {
             client = createWhatsAppClient(sessionId);
             await client.initialize();
           } else if (client.info) {
-            // Already connected, send ready status
-            broadcastToSession(sessionId, {
-              type: 'ready',
-              user: {
-                id: client.info.wid.user,
-                name: client.info.pushname,
-                phone: client.info.wid.user
+            // Already connected - verify the client is healthy by a simple check
+            try {
+              await client.getState();
+              // Client is healthy, send ready status
+              broadcastToSession(sessionId, {
+                type: 'ready',
+                user: {
+                  id: client.info.wid.user,
+                  name: client.info.pushname,
+                  phone: client.info.wid.user
+                }
+              });
+            } catch (healthErr) {
+              if (isDetachedFrameError(healthErr)) {
+                console.log(`[${sessionId}] Existing client has detached frame, reinitializing...`);
+                client = await reinitializeClient(sessionId);
+              } else {
+                // Send ready anyway, error might be transient
+                broadcastToSession(sessionId, {
+                  type: 'ready',
+                  user: {
+                    id: client.info.wid.user,
+                    name: client.info.pushname,
+                    phone: client.info.wid.user
+                  }
+                });
               }
-            });
+            }
           }
           break;
 
@@ -360,13 +432,32 @@ function setupWebSocket() {
           if (whatsappClient) {
             const chatId = msg.to.includes('@') ? msg.to : `${msg.to}@c.us`;
             await whatsappClient.sendMessage(chatId, msg.body);
+
+            // Broadcast the full sent message to ALL connected clients for cross-tab sync
+            const sentTs = msg.messageId || Date.now().toString();
+            const contactIdClean = chatId.replace('@c.us', '');
+            const sentMsgData = {
+              id: `${sentTs}_${contactIdClean}_sent`,
+              from: chatId,
+              to: chatId,
+              body: msg.body,
+              timestamp: Math.floor(parseInt(sentTs) / 1000),
+              fromMe: true,
+              contactName: 'Me',
+              chatName: chatId,
+              hasMedia: false,
+              type: 'text',
+              media: null
+            };
+            saveMessage(sessionId, chatId.replace('@c.us', ''), sentMsgData);
+            broadcastToSession(sessionId, { type: 'message', message: sentMsgData });
             broadcastToSession(sessionId, { type: 'sent', messageId: msg.messageId });
           }
           break;
 
         case 'getChats':
           // Get all chats
-          const chatsClient = clients.get(sessionId);
+          let chatsClient = clients.get(sessionId);
           if (chatsClient) {
             // First send cached chats immediately
             const cachedChats = loadData(sessionId, 'chats');
@@ -376,24 +467,46 @@ function setupWebSocket() {
             }
 
             // Then fetch fresh chats from WhatsApp
-            const chats = await chatsClient.getChats();
+            let chats;
+            try {
+              chats = await chatsClient.getChats();
+            } catch (chatsFetchErr) {
+              if (isDetachedFrameError(chatsFetchErr)) {
+                console.log(`[${sessionId}] Detached frame during getChats, reinitializing...`);
+                chatsClient = await reinitializeClient(sessionId);
+                if (!chatsClient) break;
+                chats = await chatsClient.getChats();
+              } else {
+                throw chatsFetchErr;
+              }
+            }
             const chatList = [];
+            const BATCH_SIZE = 30;
+            const filteredChats = chats.filter(c => !c.id._serialized.includes('@newsletter'));
+            console.log(`[${sessionId}] Processing ${filteredChats.length} chats (total from WhatsApp: ${chats.length})`);
 
-            for (const chat of chats.slice(0, 50)) {
+            for (let i = 0; i < filteredChats.length; i++) {
+              const chat = filteredChats[i];
               try {
-                // Skip Channels (they cause errors in whatsapp-web.js)
-                if (chat.id._serialized.includes('@newsletter')) {
-                  continue;
+                let contactName = chat.name;
+                // Only fetch contact details if name is missing
+                if (!contactName) {
+                  try {
+                    const contact = await chat.getContact();
+                    contactName = contact?.pushname || contact?.name || chat.id.user;
+                  } catch {
+                    contactName = chat.id.user;
+                  }
                 }
 
-                const contact = await chat.getContact();
-
-                // Download avatar in background
-                const avatarUrl = await downloadAvatar(chatsClient, chat.id._serialized, sessionId);
+                // Only download avatars for recent chats (first 50)
+                const avatarUrl = i < 50
+                  ? await downloadAvatar(chatsClient, chat.id._serialized, sessionId)
+                  : null;
 
                 const chatData = {
                   id: chat.id._serialized,
-                  name: chat.name || contact?.pushname || contact?.name || chat.id.user,
+                  name: contactName,
                   isGroup: chat.isGroup,
                   unreadCount: chat.unreadCount,
                   lastMessage: chat.lastMessage?.body,
@@ -408,8 +521,16 @@ function setupWebSocket() {
               } catch (err) {
                 console.log(`[${sessionId}] Skipping chat ${chat.id._serialized}:`, err.message);
               }
+
+              // Send in batches for faster UI updates
+              if (chatList.length % BATCH_SIZE === 0) {
+                console.log(`[${sessionId}] Sending batch of ${chatList.length} chats...`);
+                broadcastToSession(sessionId, { type: 'chats', chats: [...chatList], cached: false });
+              }
             }
 
+            // Send final complete list
+            console.log(`[${sessionId}] Sending final chat list: ${chatList.length} chats`);
             broadcastToSession(sessionId, { type: 'chats', chats: chatList, cached: false });
           }
           break;
@@ -432,8 +553,22 @@ function setupWebSocket() {
           if (messagesClient) {
             console.log(`[${sessionId}] Fetching fresh messages from WhatsApp for ${msg.chatId}...`);
             try {
-              const chat = await messagesClient.getChatById(msg.chatId);
-              const messages = await chat.fetchMessages({ limit: msg.limit || 50 });
+              let chat;
+              let messages;
+              try {
+                chat = await messagesClient.getChatById(msg.chatId);
+                messages = await chat.fetchMessages({ limit: msg.limit || 50 });
+              } catch (fetchErr) {
+                if (isDetachedFrameError(fetchErr)) {
+                  console.log(`[${sessionId}] Detached frame during getMessages, reinitializing...`);
+                  const recoveredClient = await reinitializeClient(sessionId);
+                  if (!recoveredClient) throw fetchErr;
+                  chat = await recoveredClient.getChatById(msg.chatId);
+                  messages = await chat.fetchMessages({ limit: msg.limit || 50 });
+                } else {
+                  throw fetchErr;
+                }
+              }
               console.log(`[${sessionId}] Fetched ${messages.length} messages from WhatsApp`);
               const messageList = [];
 
