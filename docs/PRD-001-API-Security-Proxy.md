@@ -1137,18 +1137,29 @@ The frontend will be updated to use the proxy. There's no fallback to direct Gem
 
 ### 11.1 NPM Packages
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `express` | ^4.18.2 | HTTP server framework |
-| `express-rate-limit` | ^7.1.5 | Rate limiting middleware |
-| `zod` | ^3.22.4 | Schema validation |
-| `helmet` | ^7.1.0 | Security headers |
-| `pino` | ^8.17.2 | Structured logging |
-| `pino-http` | ^9.0.0 | HTTP request logging |
-| `pino-pretty` | ^10.3.1 | Pretty-print logs (dev only) |
-| `cors` | ^2.8.5 | CORS middleware |
-| `@google/genai` | ^0.5.0 | Gemini SDK (server-side only) |
-| `dotenv` | ^16.3.1 | Environment variable loading |
+> **⚠️ IMPORTANT: Express 5.x Migration (Updated 2026-04-01)**
+> 
+> Based on [RESEARCH-TECH-STACK.md](./RESEARCH-TECH-STACK.md), we are using **Express 5.x** which includes:
+> - **Breaking Changes:** No regex routes, use Zod for validation instead
+> - **Node.js ≥18 required**
+> - **Automatic async error handling** (rejected promises caught automatically)
+> - **Body parser changes:** `urlencoded({ extended: false })` is now default
+> - **CVE-2024-45590 fixed:** Prototype pollution via body-parser depth limit
+> 
+> See migration guide: https://expressjs.com/en/guide/migrating-5.html
+
+| Package | Version | Purpose | Notes |
+|---------|---------|---------|-------|
+| `express` | **^5.2.1** | HTTP server framework | ⚠️ Major upgrade from 4.x - see breaking changes |
+| `express-rate-limit` | **^8.3.2** | Rate limiting middleware | Includes IPv6 bypass fix, new Store API |
+| `zod` | **^4.3.6** | Schema validation | Required for Express 5.x (replaces regex routes) |
+| `helmet` | **^8.1.0** | Security headers | New COOP/COEP/CORP headers |
+| `pino` | **^10.3.1** | Structured logging | Node.js 18+ required, ESM-first |
+| `pino-http` | **^10.4.0** | HTTP request logging | |
+| `pino-pretty` | ^13.0.0 | Pretty-print logs (dev only) | |
+| `cors` | **^2.8.6** | CORS middleware | Stable API |
+| `@google/genai` | ^0.5.0 | Gemini SDK (server-side only) | |
+| `dotenv` | ^16.3.1 | Environment variable loading | |
 
 ### 11.2 Dev Dependencies
 
@@ -1156,18 +1167,32 @@ The frontend will be updated to use the proxy. There's no fallback to direct Gem
 |---------|---------|---------|
 | `vitest` | ^1.2.0 | Test framework |
 | `supertest` | ^6.3.4 | HTTP testing |
-| `@types/express` | ^4.17.21 | TypeScript types |
+| `@types/express` | ^5.0.0 | TypeScript types (Express 5.x) |
 | `@types/cors` | ^2.8.17 | TypeScript types |
 
 ### 11.3 Installation
 
 ```bash
-# Production dependencies
-npm install express express-rate-limit zod helmet pino pino-http cors @google/genai dotenv
+# Production dependencies (Express 5.x stack)
+npm install express@^5.2.1 express-rate-limit@^8.3.2 zod@^4.3.6 helmet@^8.1.0 \
+  pino@^10.3.1 pino-http@^10.4.0 cors@^2.8.6 @google/genai dotenv
 
 # Dev dependencies  
-npm install -D vitest supertest pino-pretty @types/express @types/cors
+npm install -D vitest supertest pino-pretty@^13.0.0 @types/express @types/cors
 ```
+
+### 11.4 Express 5.x Migration Checklist
+
+Before deploying, ensure:
+
+- [ ] **Node.js ≥18** installed in all environments
+- [ ] **No regex routes** — use Zod validation middleware instead
+- [ ] **Update deprecated methods:**
+  - `res.send(status, body)` → `res.status(status).send(body)`
+  - `res.redirect('back')` → `res.redirect(req.get('Referrer') || '/')`
+- [ ] **Optional params syntax:** `/:optional?` → `{/:optional}`
+- [ ] **Trust proxy:** Ensure `app.set('trust proxy', 1)` for correct IP detection
+- [ ] **Body parser defaults:** Review `urlencoded({ extended: false })` behavior
 
 ---
 
