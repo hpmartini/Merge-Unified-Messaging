@@ -25,9 +25,6 @@ const PORT = parseInt(process.env.AI_PROXY_PORT) || 3044;
 // MIDDLEWARE
 // ============================================
 
-// HTTP request logging
-app.use(pinoHttp({ logger }));
-
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: {
@@ -37,15 +34,20 @@ app.use(helmet({
   }
 }));
 
-// JSON parsing
-app.use(express.json({ limit: '1mb' }));
-
 // CORS
 app.use(cors({
-  origin: ['http://localhost:3001', 'http://localhost:5173', 'http://127.0.0.1:3001'],
-  methods: ['POST', 'GET'],
-  allowedHeaders: ['Content-Type']
+  origin: process.env.FRONTEND_URL 
+    ? process.env.FRONTEND_URL.split(',') 
+    : ['http://localhost:3001', 'http://localhost:5173', 'http://127.0.0.1:3001'],
+  methods: ['POST', 'GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// HTTP request logging
+app.use(pinoHttp({ logger }));
+
+// JSON parsing
+app.use(express.json({ limit: '1mb' }));
 
 // ============================================
 // ROUTES
