@@ -9,6 +9,9 @@ const ARGON2_OPTIONS = {
 };
 
 export async function hashPassword(password) {
+  if (!password || password.length > 128) {
+    throw new Error('Password must be between 1 and 128 characters');
+  }
   return argon2.hash(password, ARGON2_OPTIONS);
 }
 

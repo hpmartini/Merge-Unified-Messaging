@@ -1,11 +1,13 @@
+CREATE EXTENSION IF NOT EXISTS citext;
+
 -- ============================================
 -- USERS TABLE
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           VARCHAR(255) NOT NULL UNIQUE,
+    email           CITEXT NOT NULL UNIQUE CHECK (email LIKE '%@%'),
     password_hash   VARCHAR(255) NOT NULL,
-    display_name    VARCHAR(100) NOT NULL,
+    display_name    VARCHAR(100) NOT NULL CHECK (length(trim(display_name)) > 0),
     avatar_url      VARCHAR(500),
     
     -- Account status
@@ -31,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE TABLE IF NOT EXISTS sessions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    refresh_token   VARCHAR(500) NOT NULL UNIQUE,
+    token_hash      VARCHAR(255) NOT NULL UNIQUE,
     
     -- Device/Browser info
     user_agent      VARCHAR(500),
@@ -46,7 +48,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_refresh_token ON sessions(refresh_token);
+CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 
 -- ============================================
@@ -86,7 +88,7 @@ CREATE TABLE IF NOT EXISTS user_roles (
 CREATE TABLE IF NOT EXISTS password_reset_tokens (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash  VARCHAR(255) NOT NULL,
+    token_hash  VARCHAR(255) NOT NULL UNIQUE,
     expires_at  TIMESTAMP WITH TIME ZONE NOT NULL,
     used_at     TIMESTAMP WITH TIME ZONE,
     
