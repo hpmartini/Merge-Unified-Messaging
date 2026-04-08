@@ -8,7 +8,7 @@ const getSecret = () => {
   return secret;
 };
 
-export const signToken = (payload, expiresIn = '1d') => {
+export const signToken = (payload, expiresIn = '1h') => {
   return jwt.sign(payload, getSecret(), {
     algorithm: 'HS256',
     expiresIn
