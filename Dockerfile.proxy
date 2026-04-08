@@ -9,6 +9,9 @@ RUN npm ci --omit=dev
 # Copy only the proxy server
 COPY server/ai-proxy.js ./server/
 
+# Set non-root user for security
+USER node
+
 # Environment variables are passed at runtime
 ENV NODE_ENV=production
 ENV AI_PROXY_PORT=3044

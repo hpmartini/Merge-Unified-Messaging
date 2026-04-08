@@ -52,7 +52,7 @@ app.use(cors({
     ? process.env.FRONTEND_URL.split(',') 
     : ['http://localhost:3001', 'http://localhost:5173', 'http://127.0.0.1:3001'],
   methods: ['POST', 'GET', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Timestamp', 'X-Request-Nonce']
 }));
 
 // HTTP request logging
@@ -197,7 +197,12 @@ ${historyText}`;
 app.use((err, req, res, next) => {
   logger.error({ error: err.message, stack: err.stack }, 'Unhandled error');
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({ error: status === 413 ? 'Payload too large' : 'Internal server error' });
+  
+  let errorMessage = 'Internal server error';
+  if (status === 413) errorMessage = 'Payload too large';
+  else if (status === 400) errorMessage = 'Bad request';
+  
+  res.status(status).json({ error: errorMessage });
 });
 
 // Start server
