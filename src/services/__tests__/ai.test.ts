@@ -49,6 +49,12 @@ describe('AI Service Client', () => {
     await expect(summarizeConversation([], 'Test')).rejects.toThrow('Rate limited');
   });
 
+  it('throws on network error', async () => {
+    (global.fetch as any).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    
+    await expect(summarizeConversation([], 'Test')).rejects.toThrow('Network error: Failed to reach AI proxy for summarization.');
+  });
+
   it('sends correctly formatted compose request', async () => {
     (global.fetch as any).mockResolvedValueOnce({
       ok: true,
