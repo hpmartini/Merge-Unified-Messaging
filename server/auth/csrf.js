@@ -5,7 +5,7 @@ const csrfOptions = doubleCsrf({
   getSessionIdentifier: () => "stateless",
   cookieName: "x-csrf-token",
   cookieOptions: {
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     httpOnly: true,

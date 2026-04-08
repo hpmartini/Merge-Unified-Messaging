@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { registerSchema, loginSchema } from './schemas.js';
 import { hashPassword, verifyPassword, needsRehash } from './password.js';
 import { signToken, verifyToken } from './jwt.js';
@@ -7,6 +8,23 @@ import { generateToken, doubleCsrfProtection } from './csrf.js';
 
 export const authRouter = Router();
 
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please try again later.' }
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many accounts created from this IP, please try again after an hour.' }
+});
+
 // CSRF endpoint
 authRouter.get('/csrf', (req, res) => {
   const token = generateToken(req, res);
@@ -14,7 +32,7 @@ authRouter.get('/csrf', (req, res) => {
 });
 
 // Register
-authRouter.post('/register', doubleCsrfProtection, async (req, res) => {
+authRouter.post('/register', registerLimiter, doubleCsrfProtection, async (req, res) => {
   try {
     const data = registerSchema.parse(req.body);
     
@@ -39,7 +57,7 @@ authRouter.post('/register', doubleCsrfProtection, async (req, res) => {
     res.cookie('jwt', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/'
     });
 
@@ -54,7 +72,7 @@ authRouter.post('/register', doubleCsrfProtection, async (req, res) => {
 });
 
 // Login
-authRouter.post('/login', doubleCsrfProtection, async (req, res) => {
+authRouter.post('/login', loginLimiter, doubleCsrfProtection, async (req, res) => {
   try {
     const data = loginSchema.parse(req.body);
 
@@ -81,7 +99,7 @@ authRouter.post('/login', doubleCsrfProtection, async (req, res) => {
     res.cookie('jwt', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/'
     });
 
@@ -122,7 +140,7 @@ authRouter.post('/refresh', doubleCsrfProtection, async (req, res) => {
     res.cookie('jwt', newToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: 'strict',
       path: '/'
     });
 
