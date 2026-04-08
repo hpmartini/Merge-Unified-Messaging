@@ -34,6 +34,20 @@ describe('Zod Schemas', () => {
     const invalid = loginSchema.safeParse({ email: 'not-an-email', password: 'password123' });
     expect(invalid.success).toBe(false);
   });
+
+  it('should reject email longer than 255 chars', () => {
+    const longEmail = 'a'.repeat(250) + '@example.com'; // > 255 chars
+    const invalid = loginSchema.safeParse({ email: longEmail, password: 'password123' });
+    expect(invalid.success).toBe(false);
+    expect(invalid.error.issues[0].message).toBe('Email too long');
+  });
+
+  it('should reject password longer than 128 chars', () => {
+    const longPassword = 'a'.repeat(129);
+    const invalid = loginSchema.safeParse({ email: 'test@example.com', password: longPassword });
+    expect(invalid.success).toBe(false);
+    expect(invalid.error.issues[0].message).toBe('Password too long');
+  });
 });
 
 describe('Auth Middleware', () => {
@@ -98,7 +112,23 @@ describe('Auth Middleware', () => {
     authenticate(req, res, next);
     
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid or expired token.' });
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token.' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('should return 401 on expired token', () => {
+    const token = signToken({ id: 99 }, '-1h');
+    const req = { headers: { authorization: `Bearer ${token}` }, cookies: {} };
+    const res = {
+      status: vi.fn().mockReturnThis(),
+      json: vi.fn()
+    };
+    const next = vi.fn();
+
+    authenticate(req, res, next);
+    
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Token expired.' });
     expect(next).not.toHaveBeenCalled();
   });
 });
