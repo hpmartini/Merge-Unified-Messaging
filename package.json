@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:all": "concurrently \"npm run dev\" \"npm run whatsapp\" \"npm run signal\"",
+    "dev:all": "concurrently \"npm run dev\" \"npm run proxy\" \"npm run whatsapp\" \"npm run signal\"",
+    "proxy": "node server/ai-proxy.js",
     "whatsapp": "node server/whatsapp-server.js",
     "signal": "node server/signal-server.js",
     "build": "vite build",
