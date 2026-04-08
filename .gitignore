@@ -38,3 +38,8 @@ server/signal-config/
 
 # Signal data cache (messages, contacts - personal data)
 server/data-signal/
+-e 
+# Environment Variables
+.env
+.env.*
+!.env.staging.example

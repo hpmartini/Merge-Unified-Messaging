@@ -1,0 +1,18 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Install dependencies (only production)
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Copy only the proxy server
+COPY server/ai-proxy.js ./server/
+
+# Environment variables are passed at runtime
+ENV NODE_ENV=production
+ENV AI_PROXY_PORT=3044
+
+EXPOSE 3044
+
+CMD ["node", "server/ai-proxy.js"]

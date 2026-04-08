@@ -1,6 +1,6 @@
 import { Message } from '../../types';
 
-const AI_PROXY_BASE = ''; // Same origin
+const AI_PROXY_BASE = import.meta.env.VITE_AI_PROXY_BASE || '';
 
 function getAuthHeaders() {
   // Use Web Crypto API for secure nonce generation
