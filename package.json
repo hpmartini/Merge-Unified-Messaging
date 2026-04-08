@@ -14,7 +14,9 @@
     "postinstall": "node scripts/install-signal-cli.js",
     "start": "node server/ai-proxy.js",
     "deploy": "docker-compose -f docker-compose.prod.yml up -d --build",
-    "deploy:down": "docker-compose -f docker-compose.prod.yml down"
+    "deploy:down": "docker-compose -f docker-compose.prod.yml down",
+    "db:migrate": "node server/db/migrate.js",
+    "start:proxy": "npm run db:migrate && node server/ai-proxy.js"
   },
   "dependencies": {
     "@google/genai": "^1.48.0",

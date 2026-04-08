@@ -6,8 +6,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy only the proxy server
-COPY server/ai-proxy.js ./server/
+# Copy the server directory
+COPY server/ ./server/
 
 # Set non-root user for security
 USER node
@@ -18,4 +18,4 @@ ENV AI_PROXY_PORT=3044
 
 EXPOSE 3044
 
-CMD ["node", "server/ai-proxy.js"]
+CMD ["npm", "start"]
