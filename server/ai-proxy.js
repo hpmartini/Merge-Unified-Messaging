@@ -196,7 +196,8 @@ ${historyText}`;
 // Error handler
 app.use((err, req, res, next) => {
   logger.error({ error: err.message, stack: err.stack }, 'Unhandled error');
-  res.status(500).json({ error: 'Internal server error' });
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: status === 413 ? 'Payload too large' : 'Internal server error' });
 });
 
 // Start server
