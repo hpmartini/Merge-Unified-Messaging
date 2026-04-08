@@ -24,7 +24,7 @@ const logger = pino({
 });
 
 const app = express();
-app.set('trust proxy', 1); // Essential for rate limiting behind a reverse proxy
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 'loopback' : false); // Prevent IP spoofing via X-Forwarded-For in dev/test
 const PORT = parseInt(process.env.AI_PROXY_PORT) || 3044;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
