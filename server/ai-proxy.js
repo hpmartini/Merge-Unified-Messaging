@@ -22,6 +22,7 @@ const logger = pino({
 });
 
 const app = express();
+app.set('trust proxy', 1); // Essential for rate limiting behind a reverse proxy
 const PORT = parseInt(process.env.AI_PROXY_PORT) || 3044;
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
@@ -57,8 +58,8 @@ app.use(cors({
 // HTTP request logging
 app.use(pinoHttp({ logger }));
 
-// JSON parsing
-app.use(express.json({ limit: '1mb' }));
+// JSON parsing (Limit updated to handle max allowed messages size ~5MB)
+app.use(express.json({ limit: '5mb' }));
 
 // Rate limiting
 const limiter = rateLimit({
