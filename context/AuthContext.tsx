@@ -1,5 +1,33 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// Intercept fetch to inject CSRF and Authorization tokens globally
+const originalFetch = window.fetch;
+let globalCsrfToken = '';
+
+window.fetch = async (...args) => {
+  let [resource, config] = args;
+  
+  if (typeof resource === 'string' && resource.includes('/api/')) {
+    const isModMethod = config?.method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method.toUpperCase());
+    
+    const headers = new Headers(config?.headers || {});
+    
+    if (isModMethod && globalCsrfToken && !headers.has('CSRF-Token')) {
+      headers.set('CSRF-Token', globalCsrfToken);
+    }
+    
+    const token = localStorage.getItem('token');
+    if (token && !headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    
+    config = { ...config, headers };
+    return originalFetch(resource, config);
+  }
+  
+  return originalFetch(...args);
+};
+
 interface User {
   id: string;
   username: string;
@@ -25,8 +53,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchCsrfToken = async () => {
     try {
-      const res = await fetch('/api/auth/csrf');
+      // Use originalFetch here to prevent infinite loop or unnecessary header injection
+      const res = await originalFetch('/api/auth/csrf');
       const data = await res.json();
+      globalCsrfToken = data.csrfToken;
       setCsrfToken(data.csrfToken);
       return data.csrfToken;
     } catch (error) {
