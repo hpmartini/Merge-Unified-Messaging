@@ -1226,4 +1226,7 @@ function cleanupAndExit() {
 process.on('SIGTERM', cleanupAndExit);
 process.on('SIGINT', cleanupAndExit);
 
-startServer();
+export { app };
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}
