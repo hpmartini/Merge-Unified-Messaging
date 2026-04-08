@@ -2,9 +2,9 @@ import argon2 from 'argon2';
 
 const ARGON2_OPTIONS = {
   type: argon2.argon2id,
-  memoryCost: 65536,    // 64 MB
-  timeCost: 3,          // 3 iterations
-  parallelism: 4,       // 4 threads
+  memoryCost: 47104,    // 46 MB (OWASP min)
+  timeCost: 2,          // 2 iterations
+  parallelism: 2,       // 2 threads
   hashLength: 32        // 256 bits
 };
 
