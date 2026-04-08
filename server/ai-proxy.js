@@ -8,6 +8,8 @@ import { config } from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import cookieParser from 'cookie-parser';
+import { authRouter } from './auth/routes.js';
 
 // Load environment variables
 config({ path: '.env.local' });
@@ -52,8 +54,11 @@ app.use(cors({
     ? process.env.FRONTEND_URL.split(',') 
     : ['http://localhost:3001', 'http://localhost:5173', 'http://127.0.0.1:3001'],
   methods: ['POST', 'GET', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Timestamp', 'X-Request-Nonce']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Timestamp', 'X-Request-Nonce', 'x-csrf-token'],
+  credentials: true
 }));
+
+app.use(cookieParser(process.env.COOKIE_SECRET || 'fallback-cookie-secret'));
 
 // HTTP request logging
 app.use(pinoHttp({ logger }));
@@ -132,6 +137,8 @@ function sanitize(text) {
 // ROUTES
 // ============================================
 
+app.use('/api/auth', authRouter);
+
 // GET /api/ai/health
 app.get('/api/ai/health', (req, res) => {
   res.json({
@@ -195,6 +202,11 @@ ${historyText}`;
 
 // Error handler
 app.use((err, req, res, next) => {
+  if (err.code === 'EBADCSRFTOKEN' || err.code === 'invalidCsrfTokenError') {
+    logger.warn({ ip: req.ip }, 'Invalid CSRF token');
+    return res.status(403).json({ error: 'Invalid CSRF token' });
+  }
+
   logger.error({ error: err.message, stack: err.stack }, 'Unhandled error');
   const status = err.status || err.statusCode || 500;
   
