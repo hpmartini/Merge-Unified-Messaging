@@ -7,6 +7,9 @@ import { createServer } from 'http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import cookieParser from 'cookie-parser';
+import { authenticate } from './auth/middleware.js';
+import { verifyToken } from './auth/jwt.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -19,12 +22,16 @@ if (!existsSync(AVATARS_DIR)) mkdirSync(AVATARS_DIR, { recursive: true });
 if (!existsSync(MEDIA_DIR)) mkdirSync(MEDIA_DIR, { recursive: true });
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
 
 // Serve avatars and media statically
-app.use('/avatars', express.static(AVATARS_DIR));
-app.use('/media', express.static(MEDIA_DIR));
+app.use('/avatars', authenticate, express.static(AVATARS_DIR));
+app.use('/media', authenticate, express.static(MEDIA_DIR));
 
 const server = createServer(app);
 let wss;
@@ -668,7 +675,7 @@ function setupWebSocket() {
 }
 
 // REST endpoints for status checks
-app.get('/api/status/:sessionId', (req, res) => {
+app.get('/api/status/:sessionId', authenticate, (req, res) => {
   const client = clients.get(req.params.sessionId);
   if (client && client.info) {
     res.json({
@@ -683,7 +690,7 @@ app.get('/api/status/:sessionId', (req, res) => {
   }
 });
 
-app.get('/api/sessions', (req, res) => {
+app.get('/api/sessions', authenticate, (req, res) => {
   const sessions = [];
   clients.forEach((client, sessionId) => {
     sessions.push({
@@ -699,7 +706,7 @@ app.get('/api/sessions', (req, res) => {
 });
 
 // Port discovery endpoint
-app.get('/api/port', (req, res) => {
+app.get('/api/port', authenticate, (req, res) => {
   res.json({ port: server.address().port, service: 'whatsapp' });
 });
 
@@ -735,8 +742,32 @@ async function startServer() {
   try {
     const port = await findAvailablePort(PREFERRED_PORT);
 
-    wss = new WebSocketServer({ server });
+    wss = new WebSocketServer({ noServer: true });
     setupWebSocket();
+
+    server.on('upgrade', (request, socket, head) => {
+      let token = null;
+      if (request.headers.cookie) {
+        const cookies = Object.fromEntries(request.headers.cookie.split('; ').map(c => c.split('=')));
+        token = cookies.jwt;
+      }
+      
+      if (!token) {
+        socket.write('HTTP/1.1 401 Unauthorized\\r\\n\\r\\n');
+        socket.destroy();
+        return;
+      }
+      
+      try {
+        verifyToken(token);
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+      } catch (err) {
+        socket.write('HTTP/1.1 401 Unauthorized\\r\\n\\r\\n');
+        socket.destroy();
+      }
+    });
 
     server.listen(port, () => {
       console.log(`WhatsApp server running on http://localhost:${port}`);
