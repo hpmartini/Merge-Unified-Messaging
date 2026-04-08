@@ -27,7 +27,7 @@ if (!existsSync(SIGNAL_CONFIG_DIR)) mkdirSync(SIGNAL_CONFIG_DIR, { recursive: tr
 
 const app = express();
 app.use(cors({
-  origin: true,
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json());
