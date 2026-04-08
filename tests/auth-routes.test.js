@@ -51,6 +51,8 @@ describe('Auth Routes', () => {
     expect(res.status).toBe(201);
     expect(res.body.user.email).toBe('test@example.com');
     expect(res.headers['set-cookie'][0]).toMatch(/jwt=/);
+    expect(res.headers['set-cookie'][0]).toMatch(/HttpOnly/);
+    expect(res.headers['set-cookie'][0]).toMatch(/SameSite=Strict/);
   });
 
   it('POST /api/auth/login - should authenticate and return JWT', async () => {
@@ -67,6 +69,8 @@ describe('Auth Routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
     expect(res.headers['set-cookie'][0]).toMatch(/jwt=/);
+    expect(res.headers['set-cookie'][0]).toMatch(/HttpOnly/);
+    expect(res.headers['set-cookie'][0]).toMatch(/SameSite=Strict/);
   });
 
   it('POST /api/auth/logout - should clear cookie', async () => {
@@ -77,5 +81,44 @@ describe('Auth Routes', () => {
     
     expect(res.status).toBe(200);
     expect(res.headers['set-cookie'][0]).toMatch(/jwt=;/);
+  });
+
+  it('POST /api/auth/register - should rate limit after 3 attempts (429)', async () => {
+    let status = 200;
+    
+    for (let i = 0; i < 4; i++) {
+      db.query.mockResolvedValueOnce({ rows: [] }); // User check
+      db.query.mockResolvedValueOnce({ rows: [{ id: 'uuid', email: `testlimit${i}@example.com`, display_name: 'test' }] }); // Insert
+      const res = await request(app)
+        .post('/api/auth/register')
+        .set('x-csrf-token', csrfToken)
+        .set('Cookie', cookie)
+        .send({ email: `testlimit${i}@example.com`, password: 'password123', name: 'test' });
+      
+      status = res.status;
+      if (status === 429) break;
+    }
+    
+    expect(status).toBe(429);
+  });
+
+  it('POST /api/auth/login - should rate limit after 5 attempts (429)', async () => {
+    let status = 200;
+    
+    for (let i = 0; i < 6; i++) {
+      const hashed = await passwordUtils.hashPassword('password123');
+      db.query.mockResolvedValueOnce({ rows: [{ id: 'uuid', email: 'testlimit@example.com', password_hash: hashed }] }); // Bypass check
+      db.query.mockResolvedValueOnce({ rows: [] }); // Bypass update
+      const res = await request(app)
+        .post('/api/auth/login')
+        .set('x-csrf-token', csrfToken)
+        .set('Cookie', cookie)
+        .send({ email: 'testlimit@example.com', password: 'password123' });
+      
+      status = res.status;
+      if (status === 429) break;
+    }
+    
+    expect(status).toBe(429);
   });
 });
