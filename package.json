@@ -23,6 +23,7 @@
   "dependencies": {
     "@google/genai": "^1.48.0",
     "@google/generative-ai": "^0.24.1",
+    "@slack/bolt": "^4.7.0",
     "argon2": "^0.44.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

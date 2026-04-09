@@ -13,6 +13,8 @@ import { authRouter } from './auth/routes.js';
 import { telegramService } from './services/telegramService.js';
 import { telegramRouter } from './routes/telegram.js';
 import { emailRouter } from './routes/email.js';
+import { slackService } from './services/slackService.js';
+import { slackRouter } from './routes/slack.js';
 
 // Load environment variables
 config({ path: '.env.local' });
@@ -145,6 +147,10 @@ app.use('/api/auth', authRouter);
 // Initialize Telegram Service
 telegramService.init();
 app.use('/api/telegram', telegramRouter);
+
+// Initialize Slack Service
+slackService.init();
+app.use('/api/slack', slackRouter);
 
 // Initialize Email Router
 app.use('/api/email', emailRouter);
