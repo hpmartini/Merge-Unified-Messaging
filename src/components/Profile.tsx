@@ -5,7 +5,7 @@ import { PLATFORM_CONFIG } from '../../constants';
 import { GoogleGenAI } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Share2, Filter, MessagesSquare, FolderOpen, Search, ChevronUp, ChevronDown, X, Bot, Sparkles, Loader2, ArrowLeft, Clock, Users } from 'lucide-react';
+import { Share2, Filter, MessagesSquare, FolderOpen, Search, ChevronUp, ChevronDown, X, Bot, Sparkles, Loader2, ArrowLeft, Clock, Users, Hash } from 'lucide-react';
 
 interface ProfileProps {
   userMessages: Message[];
@@ -159,7 +159,8 @@ export const Profile: React.FC<ProfileProps> = ({
                 {!isLocalSearchOpen ? (
                 <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left-2 duration-300">
                     <Share2 className="w-5 h-5 text-theme-muted" />
-                    <span className="font-sans text-theme-main font-bold text-lg">
+                    <span className="font-sans text-theme-main font-bold text-lg flex items-center gap-1.5">
+                        {selectedUser.role === 'Slack Channel' && <Hash className="w-5 h-5 text-theme-muted" />}
                         {selectedUser.name}
                     </span>
                     <span className="text-xs bg-theme-hover px-2 py-1 rounded text-theme-muted border border-theme">

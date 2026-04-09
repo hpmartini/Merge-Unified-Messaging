@@ -10,7 +10,7 @@ export enum Platform {
   Instagram = 'Instagram',
   Telegram = 'Telegram',
   WhatsAppBusiness = 'WhatsAppBusiness',
-  Slack = 'Slack',
+  Slack = 'slack',
   Teams = 'Teams',
   Threema = 'Threema',
   Email = 'email'

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { PLATFORM_CONFIG } from '../../constants';
-import { GitBranch, Search, X, Clock, Settings } from 'lucide-react';
+import { GitBranch, Search, X, Clock, Settings, Hash } from 'lucide-react';
 import { Message } from '../../types';
 
 // Format relative time (e.g., "2m", "1h", "Yesterday", "Mar 12")
@@ -198,7 +198,10 @@ const Sidebar: React.FC = () => {
                     {/* Full info - hidden in collapsed mode */}
                     <div className="flex-1 min-w-0 md:hidden lg:block">
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-theme-main truncate text-sm">{user.name}</span>
+                        <span className="font-semibold text-theme-main truncate text-sm flex items-center gap-1">
+                          {user.role === 'Slack Channel' && <Hash className="w-3.5 h-3.5 text-theme-muted" />}
+                          {user.name}
+                        </span>
                         {user.lastMessageTime && (
                           <span className="text-[10px] text-theme-muted font-mono flex-shrink-0 ml-2">
                             {formatRelativeTime(user.lastMessageTime)}
@@ -265,7 +268,8 @@ const Sidebar: React.FC = () => {
                         </div>
                         <div className="flex-1 min-w-0 md:hidden lg:block">
                           <div className="flex items-center justify-between">
-                            <span className="font-semibold text-theme-main truncate text-sm">
+                            <span className="font-semibold text-theme-main truncate text-sm flex items-center gap-1">
+                              {user.role === 'Slack Channel' && <Hash className="w-3.5 h-3.5 text-theme-muted" />}
                               {highlightText(user.name, globalSearchQuery)}
                             </span>
                           </div>

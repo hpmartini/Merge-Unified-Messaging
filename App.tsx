@@ -12,6 +12,8 @@ import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp'
 import { useSignal, SignalChat, SignalMessage } from './hooks/useSignal';
 import { useTelegram, TelegramChat, TelegramMessage } from './hooks/useTelegram';
 import { useEmail, EmailChat, EmailMessage } from './src/hooks/useEmail';
+import { useSlack, SlackChat, SlackMessage } from './src/hooks/useSlack';
+
 
 const App: React.FC = () => {
   // Telegram Integration
@@ -103,6 +105,54 @@ const App: React.FC = () => {
   const email = useEmail({
     onChatsLoaded: handleEmailChatsLoaded,
     onMessagesLoaded: handleEmailMessagesLoaded
+  });
+
+
+  // Slack Integration
+  const handleSlackChatsLoaded = useCallback((chats: SlackChat[]) => {
+    const slackUsers = chats.map(chat => ({
+      id: `slack-${chat.id}`,
+      name: chat.name,
+      avatarInitials: chat.name.substring(0, 2).toUpperCase(),
+      activePlatforms: [Platform.Slack],
+      role: chat.isChannel ? 'Slack Channel' : 'Slack Contact'
+    }));
+
+    setUsers((prev: any[]) => {
+      const mergedUsers = [...prev];
+      const addedUsers: any[] = [];
+      for (const u of slackUsers) {
+        const existingIdx = mergedUsers.findIndex(existing => existing.id === u.id || (existing.alternateIds || []).includes(u.id));
+        if (existingIdx !== -1) continue;
+        addedUsers.push(u);
+      }
+      return [...mergedUsers, ...addedUsers];
+    });
+  }, []);
+
+  const handleSlackMessagesLoaded = useCallback((chatId: string, slackMsgs: SlackMessage[]) => {
+    const newMessages = slackMsgs.map(msg => ({
+      id: `slack-${msg.id}`,
+      userId: `slack-${msg.chatId}`,
+      platform: Platform.Slack,
+      content: msg.text,
+      timestamp: new Date(msg.timestamp),
+      isMe: msg.sender === 'me',
+      hash: msg.id.toString().substring(0, 7),
+      replyToId: msg.threadId ? `slack-${msg.threadId}` : undefined,
+      replyToPlatform: msg.threadId ? Platform.Slack : undefined
+    }));
+
+    setMessages((prev: any[]) => {
+      const existingIds = new Set(prev.map(m => m.id));
+      const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const slack = useSlack({
+    onChatsLoaded: handleSlackChatsLoaded,
+    onMessagesLoaded: handleSlackMessagesLoaded
   });
 
   // --- State ---
@@ -585,6 +635,18 @@ const App: React.FC = () => {
       }
     }
 
+
+    // Collect all Slack IDs (primary + alternates)
+    const slackIds = [
+      ...(selectedUser.id.startsWith('slack-') ? [selectedUser.id] : []),
+      ...(selectedUser.alternateIds?.filter(id => id.startsWith('slack-')) || [])
+    ];
+    if (slack.status === 'ready') {
+      for (const slackId of slackIds) {
+        slack.getMessages(slackId.replace('slack-', ''));
+      }
+    }
+
     const signalIds = [
       ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
       ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
@@ -599,7 +661,7 @@ const App: React.FC = () => {
         signal.getMessages(chatId, 100);
       }
     }
-  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, signal.chats.length, telegram.status, email.status, whatsapp.getMessages, signal.getMessages, telegram.getMessages, email.getMessages]);
+  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, signal.chats.length, telegram.status, email.status, slack.status, whatsapp.getMessages, signal.getMessages, telegram.getMessages, email.getMessages, slack.getMessages]);
 
   // Preload messages for all chats when platforms become ready
   const hasPreloadedWA = useRef(false);
@@ -636,6 +698,18 @@ const App: React.FC = () => {
       }
     }
   }, [email.status, email.chats, email.getMessages]);
+
+
+  const hasPreloadedSlack = useRef(false);
+  useEffect(() => {
+    if (slack.status === 'ready' && slack.chats.length > 0 && !hasPreloadedSlack.current) {
+      hasPreloadedSlack.current = true;
+      console.log('[App] Preloading Slack messages for', slack.chats.length, 'chats');
+      for (const chat of slack.chats.slice(0, 20)) {
+        slack.getMessages(chat.id);
+      }
+    }
+  }, [slack.status, slack.chats, slack.getMessages]);
 
   // Periodic refresh: re-fetch messages for the active chat every 30s to catch missed real-time updates
   useEffect(() => {
@@ -696,7 +770,7 @@ const App: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className={`${showMobileChat ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0 relative bg-theme-base`}>
-        <ChatArea whatsapp={whatsapp} signal={signal} telegram={telegram} email={email} />
+        <ChatArea whatsapp={whatsapp} signal={signal} telegram={telegram} email={email} slack={slack} />
       </div>
 
       <MediaGallery 

@@ -14,7 +14,7 @@ export const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   [Platform.Instagram]: { id: Platform.Instagram, label: 'Instagram', color: 'text-pink-500', bgColor: 'bg-pink-500', lineColor: '#ec4899' },
   [Platform.Telegram]: { id: Platform.Telegram, label: 'Telegram', color: 'text-sky-400', bgColor: 'bg-sky-400', lineColor: '#38bdf8' },
   [Platform.WhatsAppBusiness]: { id: Platform.WhatsAppBusiness, label: 'WA Business', color: 'text-green-600', bgColor: 'bg-green-600', lineColor: '#16a34a' },
-  [Platform.Slack]: { id: Platform.Slack, label: 'Slack', color: 'text-fuchsia-500', bgColor: 'bg-fuchsia-500', lineColor: '#d946ef' },
+  [Platform.Slack]: { id: Platform.Slack, label: 'Slack', color: 'text-purple-600', bgColor: 'bg-purple-600', lineColor: '#9333ea' },
   [Platform.Teams]: { id: Platform.Teams, label: 'Teams', color: 'text-indigo-500', bgColor: 'bg-indigo-500', lineColor: '#6366f1' },
   [Platform.Threema]: { id: Platform.Threema, label: 'Threema', color: 'text-emerald-400', bgColor: 'bg-emerald-400', lineColor: '#34d399' },
   [Platform.Email]: { id: Platform.Email, label: 'Email', color: 'text-yellow-500', bgColor: 'bg-yellow-500', lineColor: '#eab308' },

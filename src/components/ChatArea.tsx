@@ -11,9 +11,10 @@ export interface ChatAreaProps {
   signal: any;
   telegram?: any;
   email?: any;
+  slack?: any;
 }
 
-export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, email }) => {
+export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, email, slack }) => {
   // Store state
   const { selectedUser } = useAppStore();
   const { messages, setMessages, setUsers } = useAppStore();
@@ -142,6 +143,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
     } else if (platform === Platform.Telegram) {
       const tgId = selectedUser.id.startsWith('tg-') ? selectedUser.id : selectedUser.alternateIds?.find(id => id.startsWith('tg-'));
       if (tgId) targetChatId = tgId.replace('tg-', '');
+    } else if (platform === Platform.Slack) {
+      const slackId = selectedUser.id.startsWith('slack-') ? selectedUser.id : selectedUser.alternateIds?.find(id => id.startsWith('slack-'));
+      if (slackId) targetChatId = slackId.replace('slack-', '');
     } else if (platform === Platform.Email) {
       const emailId = selectedUser.id.startsWith('email-') ? selectedUser.id : selectedUser.alternateIds?.find(id => id.startsWith('email-'));
       if (emailId) targetChatId = emailId.replace('email-', '');
@@ -150,6 +154,7 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
     const msgId = targetChatId
       ? (platform === Platform.Signal ? `sig-${now}_${targetChatId}_sent` : 
          platform === Platform.WhatsApp ? `wa-${now}_${targetChatId}_sent` :
+         platform === Platform.Slack ? `slack-${now}_${targetChatId}_sent` :
          platform === Platform.Email ? `email-${now}_${targetChatId}_sent` :
          `tg-${now}_${targetChatId}_sent`)
       : now.toString();
@@ -179,6 +184,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
     }
     if (platform === Platform.Email && email?.status === 'ready' && targetChatId) {
       email.sendMessage(targetChatId, content);
+    }
+    if (platform === Platform.Slack && slack?.status === 'ready' && targetChatId) {
+      slack.sendMessage(targetChatId, content, replyingTo?.id?.replace('slack-', ''));
     }
 
     setMessages([...messages, newMessage]);

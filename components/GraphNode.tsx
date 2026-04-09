@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, Platform, User, Attachment } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
-import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2 } from 'lucide-react';
+import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2, MessagesSquare } from 'lucide-react';
 import AudioWaveform from './AudioWaveform';
 
 interface GraphNodeProps {
@@ -237,9 +237,9 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                       mb-2 pb-2 border-b border-dashed border-slate-500/20 text-xs text-theme-muted flex items-center gap-2
                       ${isMe ? 'flex-row-reverse' : 'flex-row'}
                     `}>
-                       <GitMerge className="w-3 h-3 opacity-50" />
+                       {message.platform === Platform.Slack ? <MessagesSquare className="w-3 h-3 opacity-50" /> : <GitMerge className="w-3 h-3 opacity-50" />}
                        <span>
-                          {isCrossChannelReply ? `Merged from ${message.replyToPlatform}` : 'Replied to'}
+                          {isCrossChannelReply ? `Merged from ${message.replyToPlatform}` : (message.platform === Platform.Slack ? 'Thread reply' : 'Replied to')}
                        </span>
                        {message.replyToContent && (
                          <span className="italic truncate max-w-[150px] opacity-70">"{message.replyToContent}"</span>
