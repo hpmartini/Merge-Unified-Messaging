@@ -12,6 +12,7 @@ import cookieParser from 'cookie-parser';
 import { authRouter } from './auth/routes.js';
 import { telegramService } from './services/telegramService.js';
 import { telegramRouter } from './routes/telegram.js';
+import { emailRouter } from './routes/email.js';
 
 // Load environment variables
 config({ path: '.env.local' });
@@ -144,6 +145,9 @@ app.use('/api/auth', authRouter);
 // Initialize Telegram Service
 telegramService.init();
 app.use('/api/telegram', telegramRouter);
+
+// Initialize Email Router
+app.use('/api/email', emailRouter);
 
 // GET /api/ai/health
 app.get('/api/ai/health', (req, res) => {
