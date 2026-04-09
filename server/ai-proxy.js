@@ -10,6 +10,8 @@ import { z } from 'zod';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import cookieParser from 'cookie-parser';
 import { authRouter } from './auth/routes.js';
+import { telegramService } from './services/telegramService.js';
+import { telegramRouter } from './routes/telegram.js';
 
 // Load environment variables
 config({ path: '.env.local' });
@@ -138,6 +140,10 @@ function sanitize(text) {
 // ============================================
 
 app.use('/api/auth', authRouter);
+
+// Initialize Telegram Service
+telegramService.init();
+app.use('/api/telegram', telegramRouter);
 
 // GET /api/ai/health
 app.get('/api/ai/health', (req, res) => {
