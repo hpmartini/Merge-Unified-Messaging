@@ -9,9 +9,10 @@ import { UploadCloud, MessageCircle, MessagesSquare } from 'lucide-react';
 export interface ChatAreaProps {
   whatsapp: any;
   signal: any;
+  telegram?: any;
 }
 
-export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal }) => {
+export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram }) => {
   // Store state
   const { selectedUser } = useAppStore();
   const { messages, setMessages, setUsers } = useAppStore();
@@ -162,6 +163,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal }) => {
     }
     if (platform === Platform.Signal && (signal.status === 'ready' || signal.chats.length > 0) && targetChatId) {
       signal.sendMessage(targetChatId, content);
+    }
+    if (platform === Platform.Telegram && telegram?.status === 'ready' && targetChatId) {
+      telegram.sendMessage(targetChatId, content);
     }
 
     setMessages([...messages, newMessage]);

@@ -10,8 +10,54 @@ import SettingsModal from './components/SettingsModal';
 import { User, Message, Platform, Attachment } from './types';
 import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp';
 import { useSignal, SignalChat, SignalMessage } from './hooks/useSignal';
+import { useTelegram, TelegramChat, TelegramMessage } from './hooks/useTelegram';
 
 const App: React.FC = () => {
+  // Telegram Integration
+  const handleTelegramChatsLoaded = useCallback((chats: TelegramChat[]) => {
+    const tgUsers = chats.map(chat => ({
+      id: `tg-${chat.id}`,
+      name: chat.title,
+      avatarInitials: chat.title.substring(0, 2).toUpperCase(),
+      activePlatforms: [Platform.Telegram],
+      role: 'Telegram Chat'
+    }));
+
+    setUsers((prev: any[]) => {
+      const mergedUsers = [...prev];
+      const addedTgUsers: any[] = [];
+      for (const tgUser of tgUsers) {
+        const existingIdx = mergedUsers.findIndex(u => u.id === tgUser.id || (u.alternateIds || []).includes(tgUser.id));
+        if (existingIdx !== -1) continue;
+        addedTgUsers.push(tgUser);
+      }
+      return [...mergedUsers, ...addedTgUsers];
+    });
+  }, []);
+
+  const handleTelegramMessagesLoaded = useCallback((chatId: string, tgMessages: TelegramMessage[]) => {
+    const newMessages = tgMessages.map(tgMsg => ({
+      id: `tg-${tgMsg.id}`,
+      userId: `tg-${tgMsg.chatId}`,
+      platform: Platform.Telegram,
+      content: tgMsg.text,
+      timestamp: new Date(tgMsg.timestamp),
+      isMe: tgMsg.sender === 'me',
+      hash: tgMsg.id.toString().substring(0, 7)
+    }));
+
+    setMessages((prev: any[]) => {
+      const existingIds = new Set(prev.map(m => m.id));
+      const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const telegram = useTelegram({
+    onChatsLoaded: handleTelegramChatsLoaded,
+    onMessagesLoaded: handleTelegramMessagesLoaded
+  });
+
   // --- State ---
   const { users, setUsers } = useAppStore();
   const { selectedUser, setSelectedUser } = useAppStore();
@@ -471,6 +517,16 @@ const App: React.FC = () => {
     }
 
     // Collect all Signal IDs (primary + alternates)
+    const tgIds = [
+      ...(selectedUser.id.startsWith('tg-') ? [selectedUser.id] : []),
+      ...(selectedUser.alternateIds?.filter(id => id.startsWith('tg-')) || [])
+    ];
+    if (telegram.status === 'ready') {
+      for (const tgId of tgIds) {
+        telegram.getMessages(tgId.replace('tg-', ''));
+      }
+    }
+
     const signalIds = [
       ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
       ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
@@ -571,7 +627,7 @@ const App: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className={`${showMobileChat ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0 relative bg-theme-base`}>
-        <ChatArea whatsapp={whatsapp} signal={signal} />
+        <ChatArea whatsapp={whatsapp} signal={signal} telegram={telegram} />
       </div>
 
       <MediaGallery 
