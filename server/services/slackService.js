@@ -75,7 +75,7 @@ class SlackService {
       const result = await this.app.client.users.info({ user: userId });
       if (result.ok && result.user) {
         const profile = {
-          name: result.user.real_name || result.user.name,
+          name: result.user.real_name || result.user.profile?.real_name || result.user.name,
           avatar: result.user.profile?.image_48 || null
         };
         this.userProfiles.set(userId, profile);
