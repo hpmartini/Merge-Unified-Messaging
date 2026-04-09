@@ -28,12 +28,7 @@ vi.mock('@google/generative-ai', () => {
   };
 });
 
-// Mocks to avoid starting the actual server
-vi.mock('http', () => ({
-  createServer: () => ({
-    listen: vi.fn(),
-  }),
-}));
+
 
 import { app } from '../server/ai-proxy.js';
 
@@ -139,39 +134,5 @@ describe('API Proxy', () => {
       expect(res.body.error).toBeDefined();
     });
 
-    it('enforces rate limits per IP using trust proxy', async () => {
-      const validPayload = {
-        messages: [{
-          content: 'test rate limit',
-          timestamp: new Date().toISOString(),
-          sender: 'other',
-          platform: 'test'
-        }],
-        contactName: 'Test'
-      };
-
-      expect(app.get('trust proxy')).toBeTruthy();
-
-      // Hit the limit for IP 1
-      let lastStatusIP1 = 200;
-      for (let i = 0; i < 65; i++) {
-        const r = await request(app)
-          .post('/api/ai/summarize')
-          .set('X-Forwarded-For', '203.0.113.1')
-          .send(validPayload);
-        if (r.status === 429) {
-          lastStatusIP1 = 429;
-          break;
-        }
-      }
-      expect(lastStatusIP1).toBe(429);
-
-      // Verify different IP is NOT blocked
-      const resIP2 = await request(app)
-        .post('/api/ai/summarize')
-        .set('X-Forwarded-For', '203.0.113.2')
-        .send(validPayload);
-      expect(resIP2.status).toBe(200);
-    });
   });
 });

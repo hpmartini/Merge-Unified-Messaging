@@ -1,8 +1,15 @@
 import { Telegraf } from 'telegraf';
 import pino from 'pino';
+import { z } from 'zod';
 
 const logger = pino({
   level: process.env.LOG_LEVEL || 'info',
+});
+
+const TelegramEnvSchema = z.object({
+  TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required'),
+  TELEGRAM_API_ID: z.string().optional(),
+  TELEGRAM_API_HASH: z.string().optional()
 });
 
 class TelegramService {
@@ -14,13 +21,11 @@ class TelegramService {
   }
 
   init() {
-    const token = process.env.TELEGRAM_BOT_TOKEN;
-    if (!token) {
-      logger.warn('TELEGRAM_BOT_TOKEN not set, Telegram service disabled');
-      return;
-    }
-
     try {
+      // Validate env vars securely without logging secrets
+      const env = TelegramEnvSchema.parse(process.env);
+      const token = env.TELEGRAM_BOT_TOKEN;
+
       this.bot = new Telegraf(token);
 
       this.bot.on('message', (ctx) => {
@@ -62,7 +67,12 @@ class TelegramService {
       process.once('SIGINT', () => this.bot.stop('SIGINT'));
       process.once('SIGTERM', () => this.bot.stop('SIGTERM'));
     } catch (err) {
-      logger.error({ err: err.message }, 'Failed to initialize Telegram service');
+      if (err instanceof z.ZodError) {
+        // Log validation error safely (without values)
+        logger.warn('Telegram environment variables validation failed. Telegram service disabled.');
+      } else {
+        logger.error({ err: err.message }, 'Failed to initialize Telegram service');
+      }
     }
   }
 
