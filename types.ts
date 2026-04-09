@@ -12,7 +12,8 @@ export enum Platform {
   WhatsAppBusiness = 'WhatsAppBusiness',
   Slack = 'Slack',
   Teams = 'Teams',
-  Threema = 'Threema'
+  Threema = 'Threema',
+  Email = 'email'
 }
 
 export interface User {

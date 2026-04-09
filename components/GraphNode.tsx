@@ -248,8 +248,8 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                   )}
 
                   {/* Email Subject Header */}
-                  {message.platform === Platform.Mail && message.subject && (
-                      <div className={`mb-2 pb-2 border-b border-slate-500/20 font-bold text-theme-main ${isMe ? 'text-right' : 'text-left'}`}>
+                  {(message.platform === Platform.Mail || message.platform === Platform.Email) && message.subject && (
+                      <div className={`mb-2 pb-2 border-b border-slate-500/20 font-bold text-theme-main break-words ${isMe ? 'text-right' : 'text-left'}`}>
                           {searchTerm ? (
                             <span>
                               {message.subject.split(new RegExp(`(${searchTerm})`, 'gi')).map((part, i) => (
@@ -264,7 +264,7 @@ const GraphNode: React.FC<GraphNodeProps> = ({
 
                   {/* Content (Markdown Enabled) - only show if there's text content */}
                   {message.content && (
-                    <div className={`markdown-content leading-relaxed font-normal ${isMe ? 'text-theme-main' : 'text-theme-main'}`}>
+                    <div className={`markdown-content leading-relaxed font-normal ${isMe ? 'text-theme-main' : 'text-theme-main'} overflow-x-auto max-w-full break-words whitespace-pre-wrap`}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
                           components={MarkdownComponents}

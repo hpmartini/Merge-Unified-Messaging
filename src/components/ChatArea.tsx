@@ -10,9 +10,10 @@ export interface ChatAreaProps {
   whatsapp: any;
   signal: any;
   telegram?: any;
+  email?: any;
 }
 
-export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram }) => {
+export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, email }) => {
   // Store state
   const { selectedUser } = useAppStore();
   const { messages, setMessages, setUsers } = useAppStore();
@@ -138,10 +139,19 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram }
     } else if (platform === Platform.WhatsApp) {
       const waId = selectedUser.id.startsWith('wa-') ? selectedUser.id : selectedUser.alternateIds?.find(id => id.startsWith('wa-'));
       if (waId) targetChatId = waId.replace('wa-', '');
+    } else if (platform === Platform.Telegram) {
+      const tgId = selectedUser.id.startsWith('tg-') ? selectedUser.id : selectedUser.alternateIds?.find(id => id.startsWith('tg-'));
+      if (tgId) targetChatId = tgId.replace('tg-', '');
+    } else if (platform === Platform.Email) {
+      const emailId = selectedUser.id.startsWith('email-') ? selectedUser.id : selectedUser.alternateIds?.find(id => id.startsWith('email-'));
+      if (emailId) targetChatId = emailId.replace('email-', '');
     }
 
     const msgId = targetChatId
-      ? (platform === Platform.Signal ? `sig-${now}_${targetChatId}_sent` : `wa-${now}_${targetChatId}_sent`)
+      ? (platform === Platform.Signal ? `sig-${now}_${targetChatId}_sent` : 
+         platform === Platform.WhatsApp ? `wa-${now}_${targetChatId}_sent` :
+         platform === Platform.Email ? `email-${now}_${targetChatId}_sent` :
+         `tg-${now}_${targetChatId}_sent`)
       : now.toString();
 
     const newMessage: Message = {
@@ -166,6 +176,9 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram }
     }
     if (platform === Platform.Telegram && telegram?.status === 'ready' && targetChatId) {
       telegram.sendMessage(targetChatId, content);
+    }
+    if (platform === Platform.Email && email?.status === 'ready' && targetChatId) {
+      email.sendMessage(targetChatId, content);
     }
 
     setMessages([...messages, newMessage]);

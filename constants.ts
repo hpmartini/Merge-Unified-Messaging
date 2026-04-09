@@ -17,6 +17,7 @@ export const PLATFORM_CONFIG: Record<Platform, PlatformConfig> = {
   [Platform.Slack]: { id: Platform.Slack, label: 'Slack', color: 'text-fuchsia-500', bgColor: 'bg-fuchsia-500', lineColor: '#d946ef' },
   [Platform.Teams]: { id: Platform.Teams, label: 'Teams', color: 'text-indigo-500', bgColor: 'bg-indigo-500', lineColor: '#6366f1' },
   [Platform.Threema]: { id: Platform.Threema, label: 'Threema', color: 'text-emerald-400', bgColor: 'bg-emerald-400', lineColor: '#34d399' },
+  [Platform.Email]: { id: Platform.Email, label: 'Email', color: 'text-yellow-500', bgColor: 'bg-yellow-500', lineColor: '#eab308' },
 };
 
 // --- Initial Data (empty - populated from connected services) ---

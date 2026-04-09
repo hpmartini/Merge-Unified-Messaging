@@ -11,6 +11,7 @@ import { User, Message, Platform, Attachment } from './types';
 import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp';
 import { useSignal, SignalChat, SignalMessage } from './hooks/useSignal';
 import { useTelegram, TelegramChat, TelegramMessage } from './hooks/useTelegram';
+import { useEmail, EmailChat, EmailMessage } from './src/hooks/useEmail';
 
 const App: React.FC = () => {
   // Telegram Integration
@@ -56,6 +57,52 @@ const App: React.FC = () => {
   const telegram = useTelegram({
     onChatsLoaded: handleTelegramChatsLoaded,
     onMessagesLoaded: handleTelegramMessagesLoaded
+  });
+
+  // Email Integration
+  const handleEmailChatsLoaded = useCallback((chats: EmailChat[]) => {
+    const emailUsers = chats.map(chat => ({
+      id: `email-${chat.id}`,
+      name: chat.title || chat.email,
+      avatarInitials: (chat.title || chat.email || 'E').substring(0, 2).toUpperCase(),
+      activePlatforms: [Platform.Email],
+      role: 'Email Contact'
+    }));
+
+    setUsers((prev: any[]) => {
+      const mergedUsers = [...prev];
+      const addedUsers: any[] = [];
+      for (const u of emailUsers) {
+        const existingIdx = mergedUsers.findIndex(existing => existing.id === u.id || (existing.alternateIds || []).includes(u.id));
+        if (existingIdx !== -1) continue;
+        addedUsers.push(u);
+      }
+      return [...mergedUsers, ...addedUsers];
+    });
+  }, []);
+
+  const handleEmailMessagesLoaded = useCallback((chatId: string, emailMsgs: EmailMessage[]) => {
+    const newMessages = emailMsgs.map(msg => ({
+      id: `email-${msg.id}`,
+      userId: `email-${msg.chatId}`,
+      platform: Platform.Email,
+      content: msg.text,
+      subject: msg.subject,
+      timestamp: new Date(msg.timestamp),
+      isMe: msg.sender === 'me',
+      hash: msg.id.toString().substring(0, 7)
+    }));
+
+    setMessages((prev: any[]) => {
+      const existingIds = new Set(prev.map(m => m.id));
+      const uniqueNew = newMessages.filter(m => !existingIds.has(m.id));
+      return [...prev, ...uniqueNew];
+    });
+  }, []);
+
+  const email = useEmail({
+    onChatsLoaded: handleEmailChatsLoaded,
+    onMessagesLoaded: handleEmailMessagesLoaded
   });
 
   // --- State ---
@@ -527,6 +574,17 @@ const App: React.FC = () => {
       }
     }
 
+    // Collect all Email IDs (primary + alternates)
+    const emailIds = [
+      ...(selectedUser.id.startsWith('email-') ? [selectedUser.id] : []),
+      ...(selectedUser.alternateIds?.filter(id => id.startsWith('email-')) || [])
+    ];
+    if (email.status === 'ready') {
+      for (const emailId of emailIds) {
+        email.getMessages(emailId.replace('email-', ''));
+      }
+    }
+
     const signalIds = [
       ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
       ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
@@ -541,7 +599,7 @@ const App: React.FC = () => {
         signal.getMessages(chatId, 100);
       }
     }
-  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, signal.chats.length, whatsapp.getMessages, signal.getMessages]);
+  }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, signal.chats.length, telegram.status, email.status, whatsapp.getMessages, signal.getMessages, telegram.getMessages, email.getMessages]);
 
   // Preload messages for all chats when platforms become ready
   const hasPreloadedWA = useRef(false);
@@ -567,6 +625,17 @@ const App: React.FC = () => {
       }
     }
   }, [signal.status, signal.chats, signal.getMessages]);
+
+  const hasPreloadedEmail = useRef(false);
+  useEffect(() => {
+    if (email.status === 'ready' && email.chats.length > 0 && !hasPreloadedEmail.current) {
+      hasPreloadedEmail.current = true;
+      console.log('[App] Preloading Email messages for', email.chats.length, 'chats');
+      for (const chat of email.chats.slice(0, 20)) {
+        email.getMessages(chat.id);
+      }
+    }
+  }, [email.status, email.chats, email.getMessages]);
 
   // Periodic refresh: re-fetch messages for the active chat every 30s to catch missed real-time updates
   useEffect(() => {
@@ -627,7 +696,7 @@ const App: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className={`${showMobileChat ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0 relative bg-theme-base`}>
-        <ChatArea whatsapp={whatsapp} signal={signal} telegram={telegram} />
+        <ChatArea whatsapp={whatsapp} signal={signal} telegram={telegram} email={email} />
       </div>
 
       <MediaGallery 
