@@ -13,6 +13,7 @@ import { authRouter } from './auth/routes.js';
 import { telegramService } from './services/telegramService.js';
 import { telegramRouter } from './routes/telegram.js';
 import { emailRouter } from './routes/email.js';
+import { emailService } from './services/emailService.js';
 import { slackService } from './services/slackService.js';
 import { slackRouter } from './routes/slack.js';
 
@@ -165,14 +166,45 @@ app.get('/api/ai/health', (req, res) => {
 });
 
 // GET /api/health (General Service Health)
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
+app.get('/api/health', async (req, res) => {
+  let isHealthy = true;
+  
+  // Check Slack connection
+  const isSlackEnabled = !!process.env.SLACK_BOT_TOKEN;
+  const slackActive = isSlackEnabled ? slackService.isConnected : false;
+  if (isSlackEnabled && !slackActive) isHealthy = false;
+
+  // Check Telegram connection
+  const isTelegramEnabled = !!process.env.TELEGRAM_BOT_TOKEN;
+  const telegramActive = isTelegramEnabled ? telegramService.isConnected : false;
+  if (isTelegramEnabled && !telegramActive) isHealthy = false;
+
+  // Check Email (IMAP/SMTP)
+  let emailActive = false;
+  const isEmailEnabled = !!process.env.EMAIL_HOST || emailService.isConfigured;
+  if (emailService.isConfigured) {
+    try {
+      // Create a quick IMAP connection test to satisfy the requirement
+      const imapClient = await emailService.getImapClient();
+      await imapClient.logout();
+      emailActive = true;
+    } catch (e) {
+      emailActive = false;
+      isHealthy = false;
+    }
+  } else if (isEmailEnabled) {
+    isHealthy = false;
+  }
+
+  const statusCode = isHealthy ? 200 : 503;
+  
+  res.status(statusCode).json({
+    status: isHealthy ? 'ok' : 'error',
     timestamp: new Date().toISOString(),
     services: {
-      telegram: !!process.env.TELEGRAM_BOT_TOKEN,
-      slack: !!process.env.SLACK_BOT_TOKEN,
-      email: !!process.env.EMAIL_HOST,
+      telegram: telegramActive,
+      slack: slackActive,
+      email: emailActive,
       db: !!process.env.DATABASE_URL
     }
   });
