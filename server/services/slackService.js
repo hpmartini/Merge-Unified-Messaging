@@ -8,9 +8,9 @@ const logger = pino({
 });
 
 const SlackEnvSchema = z.object({
-  SLACK_BOT_TOKEN: z.string().startsWith('xoxb-', 'SLACK_BOT_TOKEN must start with xoxb-'),
-  SLACK_APP_TOKEN: z.string().startsWith('xapp-', 'SLACK_APP_TOKEN must start with xapp-'),
-  SLACK_SIGNING_SECRET: z.string().optional()
+  SLACK_BOT_TOKEN: z.string().startsWith('xoxb-', 'SLACK_BOT_TOKEN must start with xoxb-').min(20, 'SLACK_BOT_TOKEN is too short'),
+  SLACK_APP_TOKEN: z.string().startsWith('xapp-', 'SLACK_APP_TOKEN must start with xapp-').min(20, 'SLACK_APP_TOKEN is too short'),
+  SLACK_SIGNING_SECRET: z.string().min(32, 'SLACK_SIGNING_SECRET must be at least 32 characters').optional()
 });
 
 class SlackService {

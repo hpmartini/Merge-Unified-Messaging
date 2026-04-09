@@ -31,8 +31,8 @@ vi.mock('@slack/bolt', () => {
 
 describe('SlackService', () => {
   const validEnv = {
-    SLACK_BOT_TOKEN: 'xoxb-1234',
-    SLACK_APP_TOKEN: 'xapp-1234',
+    SLACK_BOT_TOKEN: 'xoxb-12345678901234567890',
+    SLACK_APP_TOKEN: 'xapp-12345678901234567890',
     SLACK_SIGNING_SECRET: '0123456789abcdef0123456789abcdef'
   };
 
@@ -60,7 +60,7 @@ describe('SlackService', () => {
       expect(slackService.app).toBeNull();
     });
 
-    it('should fail validation with missing signing secret', () => {
+    it('should fail validation with invalid signing secret', () => {
       process.env = { ...validEnv, SLACK_SIGNING_SECRET: 'short' };
       slackService.init();
       expect(slackService.app).toBeNull();
