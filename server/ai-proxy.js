@@ -164,6 +164,20 @@ app.get('/api/ai/health', (req, res) => {
   });
 });
 
+// GET /api/health (General Service Health)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    services: {
+      telegram: !!process.env.TELEGRAM_BOT_TOKEN,
+      slack: !!process.env.SLACK_BOT_TOKEN,
+      email: !!process.env.EMAIL_HOST,
+      db: !!process.env.DATABASE_URL
+    }
+  });
+});
+
 // POST /api/ai/summarize
 app.post('/api/ai/summarize', validate(SummarizeRequestSchema), async (req, res) => {
   const startTime = Date.now();
