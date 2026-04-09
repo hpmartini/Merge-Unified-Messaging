@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "dev:all": "concurrently \"npm run dev\" \"npm run proxy\" \"npm run whatsapp\" \"npm run signal\"",
     "proxy": "node server/ai-proxy.js",
     "whatsapp": "node server/whatsapp-server.js",
