@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useAppStore } from './src/store/useAppStore';
 import Sidebar from './components/Sidebar';
 import Composer from './components/Composer';
 import GraphNode from './components/GraphNode';
@@ -18,21 +19,21 @@ import { Share2, Filter, MessagesSquare, FolderOpen, UploadCloud, Search, Chevro
 
 const App: React.FC = () => {
   // --- State ---
-  const [users, setUsers] = useState<User[]>(USERS);
-  const [selectedUser, setSelectedUser] = useState<User | null>(USERS[0] || null);
-  const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
-  const [visiblePlatforms, setVisiblePlatforms] = useState<Set<Platform>>(new Set(Object.values(Platform)));
-  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [lightboxImage, setLightboxImage] = useState<Attachment | null>(null);
-  const [activePDF, setActivePDF] = useState<Attachment | null>(null);
+  const { users, setUsers } = useAppStore();
+  const { selectedUser, setSelectedUser } = useAppStore();
+  const { messages, setMessages } = useAppStore();
+  const { visiblePlatforms, setVisiblePlatforms } = useAppStore();
+  const { replyingTo, setReplyingTo } = useAppStore();
+  const { isGalleryOpen, setIsGalleryOpen } = useAppStore();
+  const { lightboxImage, setLightboxImage } = useAppStore();
+  const { activePDF, setActivePDF } = useAppStore();
 
   // Mobile View State
-  const [showMobileChat, setShowMobileChat] = useState(false);
+  const { showMobileChat, setShowMobileChat } = useAppStore();
 
   // Settings & Theme
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [theme, setTheme] = useState<'dark' | 'dimmed' | 'light'>('dark');
+  const { isSettingsOpen, setIsSettingsOpen } = useAppStore();
+  const { theme, setTheme } = useAppStore();
 
   // WhatsApp Integration
   const handleWhatsAppMessage = useCallback((waMsg: WhatsAppMessage) => {
@@ -547,7 +548,7 @@ const App: React.FC = () => {
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
-  const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
+  const { targetMessageId, setTargetMessageId } = useAppStore();
   
   // Local Conversation Search State
   const [isLocalSearchOpen, setIsLocalSearchOpen] = useState(false);
@@ -555,12 +556,12 @@ const App: React.FC = () => {
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
   // Draft State
-  const [draftAttachments, setDraftAttachments] = useState<Attachment[]>([]);
+  const { draftAttachments, setDraftAttachments } = useAppStore();
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   // AI Summary State
-  const [summary, setSummary] = useState<string | null>(null);
+  const { summary, setSummary } = useAppStore();
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [summaryOptions, setSummaryOptions] = useState({
     blockLimit: 1, // Number of "conversation blocks" to summarize
