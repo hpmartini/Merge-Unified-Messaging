@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAppStore } from './src/store/useAppStore';
-import Sidebar from './components/Sidebar';
+import Sidebar from './src/components/Sidebar';
 import Composer from './components/Composer';
 import GraphNode from './components/GraphNode';
 import MediaGallery from './components/MediaGallery';
@@ -548,8 +548,8 @@ const App: React.FC = () => {
   }, [selectedUser?.id, selectedUser?.alternateIds, signal.status, signal.chats.length, whatsapp.status, signal.getMessages, whatsapp.getMessages]);
 
   // Global Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  const { targetMessageId, setTargetMessageId } = useAppStore();
+  const { targetMessageId, setTargetMessageId, setSummary } = useAppStore();
+  const { globalSearchQuery } = useAppStore();
   
   // Local Conversation Search State
   const [isLocalSearchOpen, setIsLocalSearchOpen] = useState(false);
@@ -578,23 +578,7 @@ const App: React.FC = () => {
     return filtered.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }, [messages, selectedUser]);
 
-  const globalSearchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.toLowerCase();
-    return messages.filter(m =>
-      m.content.toLowerCase().includes(query) ||
-      (m.subject && m.subject.toLowerCase().includes(query))
-    ).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-  }, [messages, searchQuery]);
 
-  // Sort users by last message time (most recent first)
-  const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
-      const aTime = a.lastMessageTime?.getTime() || 0;
-      const bTime = b.lastMessageTime?.getTime() || 0;
-      return bTime - aTime; // Most recent first
-    });
-  }, [users]);
 
   // Local Match Navigation
   const localMatches = useMemo(() => {
@@ -657,22 +641,6 @@ const App: React.FC = () => {
 
   // --- Handlers ---
   
-  const handleUserSelection = (u: User) => {
-    setSelectedUser(u);
-    setShowMobileChat(true);
-  };
-
-  const handleSearchResultClick = (message: Message) => {
-    const user = users.find(u => u.id === message.userId);
-    if (user) {
-      setTargetMessageId(message.id);
-      setSelectedUser(user);
-      const nextVisible = new Set(visiblePlatforms);
-      nextVisible.add(message.platform);
-      setVisiblePlatforms(nextVisible);
-      setShowMobileChat(true);
-    }
-  };
 
   const navigateLocalMatch = (direction: 'next' | 'prev') => {
     if (localMatches.length === 0) return;
@@ -800,16 +768,7 @@ const App: React.FC = () => {
       
       {/* Mobile: Toggle Sidebar visibility */}
       <div className={`${showMobileChat ? 'hidden' : 'flex'} w-full md:w-auto md:flex h-full`}>
-        <Sidebar
-            users={sortedUsers}
-            selectedUser={selectedUser}
-            onSelectUser={handleUserSelection}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            searchResults={globalSearchResults}
-            onSearchResultClick={handleSearchResultClick}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-        />
+        <Sidebar />
       </div>
 
       {/* Mobile: Toggle Main Chat visibility */}
@@ -888,7 +847,7 @@ const App: React.FC = () => {
                   onImageClick={setLightboxImage}
                   onDocView={handleDocumentAction}
                   isTargeted={targetMessageId === msg.id}
-                  searchTerm={isLocalSearchOpen ? localSearchQuery : searchQuery}
+                  searchTerm={isLocalSearchOpen ? localSearchQuery : globalSearchQuery}
                   singleChannel={selectedUser.activePlatforms.length === 1}
                 />
               ))

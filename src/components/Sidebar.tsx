@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Platform, Message } from '../types';
-import { PLATFORM_CONFIG } from '../constants';
-import { GitBranch, Search, X, MessageSquare, Clock, Settings } from 'lucide-react';
+import { useAppStore } from '../store/useAppStore';
+import { PLATFORM_CONFIG } from '../../constants';
+import { GitBranch, Search, X, Clock, Settings } from 'lucide-react';
+import { Message } from '../../types';
 
 // Format relative time (e.g., "2m", "1h", "Yesterday", "Mar 12")
 const formatRelativeTime = (date: Date | undefined): string => {
@@ -23,51 +23,80 @@ const formatRelativeTime = (date: Date | undefined): string => {
   return date.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
 };
 
-interface SidebarProps {
-  users: User[];
-  selectedUser: User | null;
-  onSelectUser: (user: User) => void;
-  searchQuery: string;
-  setSearchQuery: (query: string) => void;
-  searchResults: Message[];
-  onSearchResultClick: (message: Message) => void;
-  onOpenSettings: () => void;
-}
+const Sidebar: React.FC = () => {
+  const { 
+    users, 
+    selectedUser, 
+    setSelectedUser, 
+    messages,
+    globalSearchQuery,
+    setGlobalSearchQuery,
+    setIsSettingsOpen,
+    setShowMobileChat,
+    setTargetMessageId,
+    visiblePlatforms,
+    setVisiblePlatforms
+  } = useAppStore();
 
-const Sidebar: React.FC<SidebarProps> = ({
-  users,
-  selectedUser,
-  onSelectUser,
-  searchQuery,
-  setSearchQuery,
-  searchResults,
-  onSearchResultClick,
-  onOpenSettings
-}) => {
+  // Sort users by last message time (most recent first)
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const aTime = a.lastMessageTime?.getTime() || 0;
+      const bTime = b.lastMessageTime?.getTime() || 0;
+      return bTime - aTime; // Most recent first
+    });
+  }, [users]);
+
   // Local input state for immediate UI feedback
-  const [inputValue, setInputValue] = useState(searchQuery);
+  const [inputValue, setInputValue] = useState(globalSearchQuery);
 
   // Debounce: update parent searchQuery after 150ms
   useEffect(() => {
     const timer = setTimeout(() => {
-      setSearchQuery(inputValue);
+      setGlobalSearchQuery(inputValue);
     }, 150);
     return () => clearTimeout(timer);
-  }, [inputValue, setSearchQuery]);
+  }, [inputValue, setGlobalSearchQuery]);
 
   // Sync local state if parent changes (e.g., clearing from outside)
   useEffect(() => {
-    setInputValue(searchQuery);
-  }, [searchQuery]);
+    setInputValue(globalSearchQuery);
+  }, [globalSearchQuery]);
 
-  const isSearching = searchQuery.trim().length > 0;
+  const isSearching = globalSearchQuery.trim().length > 0;
 
   // Filter users by name when searching
   const filteredUsers = useMemo(() => {
-    if (!isSearching) return users;
-    const query = searchQuery.toLowerCase();
-    return users.filter(u => u.name.toLowerCase().includes(query));
-  }, [users, searchQuery, isSearching]);
+    if (!isSearching) return sortedUsers;
+    const query = globalSearchQuery.toLowerCase();
+    return sortedUsers.filter(u => u.name.toLowerCase().includes(query));
+  }, [sortedUsers, globalSearchQuery, isSearching]);
+
+  const globalSearchResults = useMemo(() => {
+    if (!globalSearchQuery.trim()) return [];
+    const query = globalSearchQuery.toLowerCase();
+    return messages.filter(m =>
+      m.content.toLowerCase().includes(query) ||
+      (m.subject && m.subject.toLowerCase().includes(query))
+    ).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  }, [messages, globalSearchQuery]);
+
+  const handleUserSelection = (u: any) => {
+    setSelectedUser(u);
+    setShowMobileChat(true);
+  };
+
+  const handleSearchResultClick = (message: Message) => {
+    const user = users.find(u => u.id === message.userId);
+    if (user) {
+      setTargetMessageId(message.id);
+      setSelectedUser(user);
+      const nextVisible = new Set(visiblePlatforms);
+      nextVisible.add(message.platform);
+      setVisiblePlatforms(nextVisible);
+      setShowMobileChat(true);
+    }
+  };
 
   const highlightText = (text: string, highlight: string) => {
     if (!highlight.trim()) return text;
@@ -108,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           />
           {inputValue && (
             <button
-              onClick={() => { setInputValue(''); setSearchQuery(''); }}
+              onClick={() => { setInputValue(''); setGlobalSearchQuery(''); }}
               className="absolute right-3 top-2.5 text-theme-muted hover:text-theme-main transition-colors"
             >
               <X className="w-4 h-4" />
@@ -123,13 +152,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           <>
             <div className="px-4 pb-2 text-[10px] font-bold text-theme-muted uppercase tracking-widest mt-2 flex items-center justify-between md:hidden lg:flex">
               <span>Contacts</span>
-              <span className="text-[9px] bg-theme-base px-1.5 rounded-full">{users.length}</span>
+              <span className="text-[9px] bg-theme-base px-1.5 rounded-full">{sortedUsers.length}</span>
             </div>
             <ul className="md:px-1 lg:px-0">
-              {users.map(user => (
+              {sortedUsers.map(user => (
                 <li key={user.id}>
                   <button
-                    onClick={() => onSelectUser(user)}
+                    onClick={() => handleUserSelection(user)}
                     className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
                       selectedUser?.id === user.id
                         ? 'bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-blue-500'
@@ -144,7 +173,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                           selectedUser?.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
                         }`}
                         onError={(e) => {
-                          // Fallback to initials on error
                           e.currentTarget.style.display = 'none';
                           e.currentTarget.nextElementSibling?.classList.remove('hidden');
                         }}
@@ -208,8 +236,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                     <li key={user.id}>
                       <button
                         onClick={() => {
-                          onSelectUser(user);
-                          setSearchQuery('');
+                          handleUserSelection(user);
+                          setGlobalSearchQuery('');
                         }}
                         className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
                           selectedUser?.id === user.id
@@ -238,7 +266,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div className="flex-1 min-w-0 md:hidden lg:block">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-theme-main truncate text-sm">
-                              {highlightText(user.name, searchQuery)}
+                              {highlightText(user.name, globalSearchQuery)}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 mt-1">
@@ -262,10 +290,10 @@ const Sidebar: React.FC<SidebarProps> = ({
             {/* Message Search Results */}
             <div className="px-4 pb-2 text-[10px] font-bold text-theme-muted uppercase tracking-widest mt-2 flex items-center justify-between">
               <span>Messages</span>
-              <span className="text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/20 px-1.5 rounded-full">{searchResults.length}</span>
+              <span className="text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/20 px-1.5 rounded-full">{globalSearchResults.length}</span>
             </div>
 
-            {searchResults.length === 0 && filteredUsers.length === 0 ? (
+            {globalSearchResults.length === 0 && filteredUsers.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
                 <div className="w-12 h-12 rounded-full bg-theme-base flex items-center justify-center mb-4 border border-theme">
                   <Search className="w-6 h-6 text-theme-muted" />
@@ -273,19 +301,19 @@ const Sidebar: React.FC<SidebarProps> = ({
                 <p className="text-sm text-theme-muted font-medium">No results found</p>
                 <p className="text-xs text-theme-muted mt-1">Try searching for keywords, dates, or contact names</p>
               </div>
-            ) : searchResults.length === 0 ? (
+            ) : globalSearchResults.length === 0 ? (
               <div className="px-4 py-4 text-xs text-theme-muted text-center">
                 No messages found
               </div>
             ) : (
               <ul>
-                {searchResults.map(msg => {
+                {globalSearchResults.map(msg => {
                   const user = users.find(u => u.id === msg.userId);
                   const config = PLATFORM_CONFIG[msg.platform];
                   return (
                     <li key={msg.id} className="border-b border-theme last:border-0">
                       <button
-                        onClick={() => onSearchResultClick(msg)}
+                        onClick={() => handleSearchResultClick(msg)}
                         className="w-full text-left px-4 py-4 hover:bg-theme-hover transition-all group"
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -314,10 +342,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <div className="text-[11px] text-theme-muted leading-relaxed line-clamp-2">
                           {msg.subject && (
                              <div className="text-theme-main font-bold mb-0.5 truncate italic">
-                               {highlightText(msg.subject, searchQuery)}
+                               {highlightText(msg.subject, globalSearchQuery)}
                              </div>
                           )}
-                          {highlightText(msg.content, searchQuery)}
+                          {highlightText(msg.content, globalSearchQuery)}
                         </div>
                         <div className="mt-2 flex items-center gap-2 text-[9px] text-theme-muted font-mono">
                            <Clock className="w-3 h-3" />
@@ -337,7 +365,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Footer Controls */}
       <div className="p-3 md:p-2 lg:p-3 border-t border-theme">
         <button
-          onClick={onOpenSettings}
+          onClick={() => setIsSettingsOpen(true)}
           className="w-full flex items-center gap-2 px-3 py-2 md:justify-center lg:justify-start text-sm font-medium text-theme-muted hover:text-theme-main hover:bg-theme-hover rounded-md transition-colors"
         >
           <Settings className="w-4 h-4" />

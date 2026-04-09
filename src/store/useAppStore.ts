@@ -23,7 +23,7 @@ interface AppState {
   globalSearchResults: Message[];
   
   // Actions
-  setUsers: (users: User[]) => void;
+  setUsers: (users: User[] | ((prev: User[]) => User[])) => void;
   setSelectedUser: (user: User | null) => void;
   setMessages: (messages: Message[] | ((prev: Message[]) => Message[])) => void;
   setVisiblePlatforms: (platforms: Set<Platform>) => void;
@@ -35,7 +35,7 @@ interface AppState {
   setIsSettingsOpen: (isOpen: boolean) => void;
   setTheme: (theme: 'dark' | 'dimmed' | 'light') => void;
   setTargetMessageId: (id: string | null) => void;
-  setDraftAttachments: (attachments: Attachment[]) => void;
+  setDraftAttachments: (attachments: Attachment[] | ((prev: Attachment[]) => Attachment[])) => void;
   setSummary: (summary: string | null) => void;
   setGlobalSearchQuery: (query: string) => void;
   setIsSearching: (isSearching: boolean) => void;
@@ -63,7 +63,7 @@ export const useAppStore = create<AppState>((set) => ({
   showGlobalSearch: false,
   globalSearchResults: [],
   
-  setUsers: (users) => set({ users }),
+  setUsers: (users) => set((state) => ({ users: typeof users === 'function' ? users(state.users) : users })),
   setSelectedUser: (selectedUser) => set({ selectedUser }),
   setMessages: (messages) => set((state) => ({ 
     messages: typeof messages === 'function' ? messages(state.messages) : messages 
@@ -77,7 +77,7 @@ export const useAppStore = create<AppState>((set) => ({
   setIsSettingsOpen: (isSettingsOpen) => set({ isSettingsOpen }),
   setTheme: (theme) => set({ theme }),
   setTargetMessageId: (targetMessageId) => set({ targetMessageId }),
-  setDraftAttachments: (draftAttachments) => set({ draftAttachments }),
+  setDraftAttachments: (draftAttachments) => set((state) => ({ draftAttachments: typeof draftAttachments === 'function' ? draftAttachments(state.draftAttachments) : draftAttachments })),
   setSummary: (summary) => set({ summary }),
   setGlobalSearchQuery: (globalSearchQuery) => set({ globalSearchQuery }),
   setIsSearching: (isSearching) => set({ isSearching }),
