@@ -7,6 +7,8 @@ services:
       - "8080:80"
     depends_on:
       - ai-proxy
+    networks:
+      - frontend_net
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -25,6 +27,9 @@ services:
       dockerfile: Dockerfile.proxy
     ports:
       - "3044:3044"
+    networks:
+      - frontend_net
+      - backend_net
     env_file:
       - .env.staging
     environment:
@@ -42,6 +47,11 @@ services:
         condition: service_healthy
     command: sh -c "npm run db:migrate && npm start"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
     logging:
       driver: "json-file"
       options:
@@ -56,6 +66,8 @@ services:
   db:
     image: postgres:16-alpine
     restart: unless-stopped
+    networks:
+      - backend_net
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-merge_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-merge_password}
@@ -74,6 +86,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+networks:
+  frontend_net:
+    driver: bridge
+  backend_net:
+    driver: bridge
+    internal: true
 
 volumes:
   pgdata:
