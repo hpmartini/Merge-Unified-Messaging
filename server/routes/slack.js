@@ -26,10 +26,21 @@ router.post('/messages', async (req, res) => {
   }
 });
 
+const GetMessagesSchema = z.object({
+  chatId: z.string().optional()
+});
+
 router.get('/messages', (req, res) => {
-  const { chatId } = req.query;
-  const messages = slackService.getMessages(chatId);
-  res.json({ messages });
+  try {
+    const { chatId } = GetMessagesSchema.parse(req.query);
+    const messages = slackService.getMessages(chatId);
+    res.json({ messages });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: err.errors });
+    }
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
 });
 
 export const slackRouter = router;
