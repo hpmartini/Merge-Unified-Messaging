@@ -70,7 +70,7 @@ export function useSlack(options: UseSlackOptions = {}, pollIntervalMs = 5000) {
       const res = await fetch('/api/slack/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: chatId, content: text, threadId })
+        body: JSON.stringify({ chatId, text, threadId })
       });
       if (res.ok) {
         getMessages(chatId);
