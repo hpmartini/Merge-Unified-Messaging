@@ -43,3 +43,5 @@ Deploy with:
 ```bash
 docker-compose -f docker-compose.prod.yml up -d
 ```
+
+**For more detailed deployment instructions, including firewall requirements and health monitoring, please read the [Deployment Guide](docs/DEPLOYMENT.md).**
