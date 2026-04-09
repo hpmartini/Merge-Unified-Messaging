@@ -1,4 +1,5 @@
 import express from 'express';
+import { z } from 'zod';
 import { emailService } from '../services/emailService.js';
 
 export const emailRouter = express.Router();
@@ -11,10 +12,22 @@ const checkConfig = (req, res, next) => {
   next();
 };
 
+const sendEmailSchema = z.object({
+  to: z.string().email('Invalid recipient email address'),
+  subject: z.string().optional(),
+  text: z.string().optional(),
+  html: z.string().optional()
+}).refine(data => data.text || data.html, {
+  message: "Either 'text' or 'html' is required",
+  path: ["text"]
+});
+
 // GET /api/email/chats
 emailRouter.get('/chats', checkConfig, async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit, 10) || 20;
+    const limitSchema = z.string().regex(/^\d+$/).transform(Number).optional().default("20");
+    const limit = limitSchema.parse(req.query.limit);
+    
     const chats = await emailService.getRecentChats(limit);
     res.json(chats);
   } catch (error) {
@@ -24,7 +37,6 @@ emailRouter.get('/chats', checkConfig, async (req, res) => {
 });
 
 // GET /api/email/chats/:chatId/messages
-// Using IMAP UID as chatId for simplicity in this integration phase
 emailRouter.get('/chats/:chatId/messages', checkConfig, async (req, res) => {
   try {
     const { chatId } = req.params;
@@ -43,13 +55,18 @@ emailRouter.get('/chats/:chatId/messages', checkConfig, async (req, res) => {
 // POST /api/email/messages
 emailRouter.post('/messages', checkConfig, async (req, res) => {
   try {
-    const { to, subject, text, html } = req.body;
-    if (!to || (!text && !html)) {
-      return res.status(400).json({ error: 'Missing required fields: to, and (text or html)' });
-    }
-    const info = await emailService.sendEmail(to, subject, text, html);
+    const validatedData = sendEmailSchema.parse(req.body);
+    const info = await emailService.sendEmail(
+      validatedData.to,
+      validatedData.subject,
+      validatedData.text,
+      validatedData.html
+    );
     res.json({ success: true, info });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', details: error.errors });
+    }
     console.error('Error sending email:', error);
     res.status(500).json({ error: 'Failed to send email' });
   }

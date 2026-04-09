@@ -1,31 +1,46 @@
 import nodemailer from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
+import { z } from 'zod';
+
+const emailConfigSchema = z.object({
+  EMAIL_USER: z.string().email(),
+  EMAIL_PASS: z.string().min(1),
+  IMAP_HOST: z.string().min(1),
+  IMAP_PORT: z.string().regex(/^\d+$/).transform(Number).optional().default("993"),
+  SMTP_HOST: z.string().min(1),
+  SMTP_PORT: z.string().regex(/^\d+$/).transform(Number).optional().default("465")
+});
 
 class EmailService {
   constructor() {
-    this.emailUser = process.env.EMAIL_USER;
-    this.emailPass = process.env.EMAIL_PASS;
-    this.imapHost = process.env.IMAP_HOST;
-    this.imapPort = process.env.IMAP_PORT || 993;
-    this.smtpHost = process.env.SMTP_HOST;
-    this.smtpPort = process.env.SMTP_PORT || 465;
-
-    this.isConfigured = !!(this.emailUser && this.emailPass && this.imapHost && this.smtpHost);
-
-    if (!this.isConfigured) {
-      console.warn('[EmailService] Missing email credentials (EMAIL_USER, EMAIL_PASS, IMAP_HOST, SMTP_HOST). Email features will be disabled.');
-    } else {
+    this.isConfigured = false;
+    
+    try {
+      const config = emailConfigSchema.parse(process.env);
+      this.emailUser = config.EMAIL_USER;
+      this.emailPass = config.EMAIL_PASS;
+      this.imapHost = config.IMAP_HOST;
+      this.imapPort = config.IMAP_PORT;
+      this.smtpHost = config.SMTP_HOST;
+      this.smtpPort = config.SMTP_PORT;
+      
+      this.isConfigured = true;
+      
       this.transporter = nodemailer.createTransport({
         host: this.smtpHost,
         port: this.smtpPort,
-        secure: this.smtpPort == 465,
+        secure: this.smtpPort === 465,
         auth: {
           user: this.emailUser,
           pass: this.emailPass
         }
       });
       console.log('[EmailService] Initialized successfully.');
+    } catch (error) {
+      console.warn('[EmailService] Missing or invalid email credentials. Email features will be disabled.');
+      // If we want to see the specific errors during debugging:
+      // console.warn(error.errors);
     }
   }
 
@@ -118,7 +133,7 @@ class EmailService {
         if (msg) {
           const parsed = await simpleParser(msg.source);
           messageData = {
-            id: msg.envelope.messageId || uid,
+            id: msg.envelope.messageId || uid.toString(),
             from: msg.envelope.from.map(f => f.address).join(', '),
             subject: msg.envelope.subject,
             date: msg.internalDate,
