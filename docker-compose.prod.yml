@@ -38,13 +38,13 @@ services:
       - EMAIL_HOST=${EMAIL_HOST}
       - EMAIL_PORT=${EMAIL_PORT}
       - EMAIL_USER=${EMAIL_USER}
-      - EMAIL_PASSWORD_FILE=/run/secrets/email_password
+      - EMAIL_PASS_FILE=/run/secrets/email_pass
       - SLACK_BOT_TOKEN_FILE=/run/secrets/slack_bot_token
       - SLACK_SIGNING_SECRET_FILE=/run/secrets/slack_signing_secret
       - SLACK_APP_TOKEN_FILE=/run/secrets/slack_app_token
     secrets:
       - telegram_bot_token
-      - email_password
+      - email_pass
       - slack_bot_token
       - slack_signing_secret
       - slack_app_token
@@ -108,8 +108,8 @@ volumes:
 secrets:
   telegram_bot_token:
     environment: "TELEGRAM_BOT_TOKEN"
-  email_password:
-    environment: "EMAIL_PASSWORD"
+  email_pass:
+    environment: "EMAIL_PASS"
   slack_bot_token:
     environment: "SLACK_BOT_TOKEN"
   slack_signing_secret:

@@ -5,6 +5,7 @@ import pino from 'pino';
 import pinoHttp from 'pino-http';
 import { createServer } from 'http';
 import { config } from 'dotenv';
+import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -20,6 +21,24 @@ import { slackRouter } from './routes/slack.js';
 // Load environment variables
 config({ path: '.env.local' });
 config({ path: '.env' });
+
+// Load Docker Secrets
+const loadSecret = (envKey, secretName) => {
+  const secretPath = `/run/secrets/${secretName}`;
+  try {
+    if (fs.existsSync(secretPath)) {
+      process.env[envKey] = fs.readFileSync(secretPath, 'utf8').trim();
+    }
+  } catch (err) {
+    // Ignore read errors, fallback to existing process.env
+  }
+};
+
+loadSecret('TELEGRAM_BOT_TOKEN', 'telegram_bot_token');
+loadSecret('SLACK_APP_TOKEN', 'slack_app_token');
+loadSecret('SLACK_BOT_TOKEN', 'slack_bot_token');
+loadSecret('SLACK_SIGNING_SECRET', 'slack_signing_secret');
+loadSecret('EMAIL_PASS', 'email_pass');
 
 // Initialize logger
 const logger = pino({

@@ -43,3 +43,4 @@ server/data-signal/
 .env
 .env.*
 !.env.staging.example
+secrets/
