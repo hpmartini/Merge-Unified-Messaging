@@ -216,7 +216,11 @@ const App: React.FC = () => {
     // (WhatsApp can have multiple chat entries for the same contact, e.g. @c.us and @lid)
     const waUserMap = new Map<string, User>();
     for (const chat of chats) {
-      const normalizedName = normalizeName(chat.name);
+      let name = chat.name ? chat.name.trim() : '';
+      if (!name || !isProperName(name)) {
+        name = chat.isGroup ? 'Unknown Group' : `Unknown Number: ${chat.id}`;
+      }
+      const normalizedName = normalizeName(name);
       const chatIdClean = chat.id.replace('@c.us', '').replace('@lid', '').replace('@g.us', '');
       const waId = `wa-${chatIdClean}`;
 
@@ -240,8 +244,8 @@ const App: React.FC = () => {
       } else {
         waUserMap.set(normalizedName, {
           id: waId,
-          name: chat.name,
-          avatarInitials: chat.name.split(' ').filter(n => n.length > 0).map(n => n[0]).join('').substring(0, 2).toUpperCase() || '??',
+          name: name,
+          avatarInitials: name.split(' ').filter(n => n.length > 0).map(n => n[0]).join('').substring(0, 2).toUpperCase() || '??',
           avatarUrl,
           activePlatforms: [Platform.WhatsApp],
           role: chat.isGroup ? 'WhatsApp Group' : 'WhatsApp Contact',
@@ -404,7 +408,8 @@ const App: React.FC = () => {
 
   // Helper to extract digits for phone matching
   const extractPhone = (str: string): string => {
-    return str.replace(/\\D/g, '');
+    if (!str) return '';
+    return str.replace(/\D/g, '');
   };
 
   // Helper to check if two names are a fuzzy match
@@ -443,6 +448,7 @@ const App: React.FC = () => {
 
   // Helper to normalize name for matching (merge contacts)
   const normalizeName = (name: string): string => {
+    if (!name) return '';
     return name.trim().toLowerCase().replace(/\s+/g, ' ');
   };
 
