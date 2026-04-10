@@ -37,6 +37,7 @@
     "keytar": "^7.9.0",
     "lucide-react": "^0.475.0",
     "mailparser": "^3.9.8",
+    "multer": "^2.1.1",
     "nodemailer": "^8.0.5",
     "pg": "^8.20.0",
     "pino": "^10.3.1",

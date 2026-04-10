@@ -1,3 +1,9 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MEDIA_DIR = path.join(__dirname, '..', 'data', 'media');
+if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 import pkg from '@slack/bolt';
 const { App } = pkg;
 import pino from 'pino';
@@ -34,8 +40,9 @@ class SlackService {
 
       // Handle message events
       this.app.message(async ({ message, say }) => {
-        // Skip bot messages or messages without text
-        if (message.bot_id || !message.text) return;
+        // Skip bot messages
+        if (message.bot_id) return;
+        if (!message.text && (!message.files || message.files.length === 0)) return;
         
         await this.handleIncomingMessage(message, message.channel);
       });
@@ -90,12 +97,46 @@ class SlackService {
 
   async handleIncomingMessage(msg, channelId) {
     const userProfile = await this.getUserProfile(msg.user);
+    let attachments = [];
+    
+    if (msg.files && msg.files.length > 0 && this.app && this.app.client) {
+      for (const file of msg.files) {
+        if (file.url_private_download) {
+          try {
+            const response = await fetch(file.url_private_download, {
+              headers: {
+                Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`
+              }
+            });
+            const buffer = await response.arrayBuffer();
+            const fileName = file.name || `${file.id}.${file.filetype || 'dat'}`;
+            const finalName = `${file.id}_${fileName}`;
+            const finalPath = path.join(MEDIA_DIR, finalName);
+            fs.writeFileSync(finalPath, Buffer.from(buffer));
+            
+            const mediaType = file.mimetype?.startsWith('image') ? 'image' : file.mimetype?.startsWith('video') ? 'video' : file.mimetype?.startsWith('audio') ? 'audio' : 'document';
+            attachments.push({
+              id: file.id,
+              type: mediaType === 'image' ? 'image' : 'document',
+              mediaType,
+              url: `/media/${finalName}`,
+              name: fileName,
+              size: (file.size || 0).toString(),
+              mimetype: file.mimetype
+            });
+          } catch (err) {
+            logger.error({ err: err.message }, 'Failed to download Slack file');
+          }
+        }
+      }
+    }
     
     const formattedMsg = {
       id: msg.ts,
       chatId: channelId,
       threadId: msg.thread_ts || null,
-      text: msg.text,
+      text: msg.text || '',
+      attachments: attachments.length > 0 ? attachments : undefined,
       sender: 'other',
       senderName: userProfile.name,
       avatar: userProfile.avatar,
@@ -110,7 +151,7 @@ class SlackService {
     // broadcastMsg(formattedMsg);
   }
 
-  async sendMessage(chatId, text, threadTs = null) {
+  async sendMessage(chatId, text, threadTs = null, attachments = []) {
     if (!this.app || !this.isConnected) {
       throw new Error('Slack bot is not connected');
     }
@@ -125,7 +166,28 @@ class SlackService {
         options.thread_ts = threadTs;
       }
 
-      const result = await this.app.client.chat.postMessage(options);
+      let result;
+      if (attachments && attachments.length > 0) {
+        const att = attachments[0];
+        const fileName = att.url.split('/').pop();
+        const filePath = path.join(MEDIA_DIR, fileName);
+        if (fs.existsSync(filePath)) {
+          // Slack bolt files.uploadV2
+          result = await this.app.client.files.uploadV2({
+            channel_id: chatId,
+            initial_comment: text,
+            thread_ts: threadTs,
+            file: fs.createReadStream(filePath),
+            filename: fileName
+          });
+          // map result so it looks like postMessage
+          result = { ok: true, ts: Date.now().toString() / 1000, message: { text, thread_ts: threadTs } };
+        } else {
+          result = await this.app.client.chat.postMessage(options);
+        }
+      } else {
+        result = await this.app.client.chat.postMessage(options);
+      }
       
       if (result.ok) {
         const sentMsg = result.message;
@@ -133,7 +195,8 @@ class SlackService {
           id: result.ts,
           chatId: chatId,
           threadId: sentMsg.thread_ts || null,
-          text: sentMsg.text,
+          text: sentMsg.text || text || '',
+        attachments: attachments.length > 0 ? attachments : undefined,
           sender: 'me',
           senderName: 'Me',
           timestamp: new Date(parseFloat(result.ts) * 1000).toISOString(),

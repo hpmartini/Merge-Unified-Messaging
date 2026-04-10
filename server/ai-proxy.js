@@ -10,6 +10,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import cookieParser from 'cookie-parser';
+import multer from 'multer';
 import { authRouter } from './auth/routes.js';
 import { telegramService } from './services/telegramService.js';
 import { telegramRouter } from './routes/telegram.js';
@@ -17,6 +18,9 @@ import { emailRouter } from './routes/email.js';
 import { emailService } from './services/emailService.js';
 import { slackService } from './services/slackService.js';
 import { slackRouter } from './routes/slack.js';
+import { authenticate } from './auth/middleware.js';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 // Load environment variables
 config({ path: '.env.local' });
@@ -161,6 +165,22 @@ function sanitize(text) {
 // ============================================
 // ROUTES
 // ============================================
+
+// Serve media statically
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MEDIA_DIR = join(__dirname, 'data', 'media');
+if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
+app.use('/media', authenticate, express.static(MEDIA_DIR));
+
+// Upload endpoint
+const upload = multer({ dest: MEDIA_DIR });
+app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const ext = req.file.originalname.substring(req.file.originalname.lastIndexOf('.'));
+  const finalName = req.file.filename + ext;
+  fs.renameSync(req.file.path, join(MEDIA_DIR, finalName));
+  res.json({ url: `/media/${finalName}`, type: req.file.mimetype, size: req.file.size, name: req.file.originalname });
+});
 
 app.use('/api/auth', authRouter);
 

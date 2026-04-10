@@ -35,7 +35,7 @@ const SendMessageSchema = z.object({
 router.post('/messages', async (req, res) => {
   try {
     const { chatId, text } = SendMessageSchema.parse(req.body);
-    const message = await telegramService.sendMessage(chatId, text);
+    const message = await telegramService.sendMessage(chatId, text, { attachments: req.body.attachments });
     res.json({ message });
   } catch (error) {
     if (error instanceof z.ZodError) {

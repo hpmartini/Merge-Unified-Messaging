@@ -597,7 +597,8 @@ function setupWebSocket() {
                     contactName: contact?.pushname || contact?.name || m.from,
                     hasMedia: m.hasMedia,
                     type: m.type,
-                    media: media
+                    media: media?.url || null,
+                    attachments: media ? [media] : undefined
                   };
                   messageList.push(msgData);
 

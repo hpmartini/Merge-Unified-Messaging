@@ -1,3 +1,9 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MEDIA_DIR = path.join(__dirname, '..', 'data', 'media');
+if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 import nodemailer from 'nodemailer';
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
@@ -60,7 +66,7 @@ class EmailService {
     return client;
   }
 
-  async sendEmail(to, subject, text, html) {
+  async sendEmail(to, subject, text, html, attachments = []) {
     if (!this.isConfigured) throw new Error('Email service not configured');
     
     const mailOptions = {
@@ -68,7 +74,15 @@ class EmailService {
       to,
       subject,
       text,
-      html
+      html,
+      attachments: attachments.map(att => {
+        const fileName = att.url.split('/').pop();
+        const filePath = path.join(MEDIA_DIR, fileName);
+        return {
+          filename: att.name || fileName,
+          path: filePath
+        };
+      }).filter(a => fs.existsSync(a.path))
     };
 
     const info = await this.transporter.sendMail(mailOptions);
@@ -138,7 +152,22 @@ class EmailService {
             subject: msg.envelope.subject,
             date: msg.internalDate,
             text: parsed.text,
-            html: parsed.html
+            html: parsed.html,
+            attachments: parsed.attachments.map(att => {
+              const fileId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+              const finalName = `${fileId}_${att.filename}`;
+              const finalPath = path.join(MEDIA_DIR, finalName);
+              fs.writeFileSync(finalPath, att.content);
+              return {
+                id: fileId,
+                type: att.contentType.startsWith('image') ? 'image' : 'document',
+                mediaType: att.contentType.startsWith('image') ? 'image' : att.contentType.startsWith('video') ? 'video' : att.contentType.startsWith('audio') ? 'audio' : 'document',
+                url: `/media/${finalName}`,
+                name: att.filename,
+                size: att.size,
+                mimetype: att.contentType
+              };
+            })
           };
         }
       } finally {

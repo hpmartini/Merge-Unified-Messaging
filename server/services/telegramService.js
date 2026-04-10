@@ -1,3 +1,9 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const MEDIA_DIR = path.join(__dirname, '..', 'data', 'media');
+if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 import { Telegraf } from 'telegraf';
 import pino from 'pino';
 import { z } from 'zod';
@@ -41,19 +47,50 @@ class TelegramService {
         }
 
         // Basic message tracking
-        if (msg.text) {
-          const formattedMsg = {
-            id: msg.message_id,
-            chatId: ctx.chat.id,
-            text: msg.text,
-            sender: msg.from.id === ctx.botInfo.id ? 'me' : 'other',
-            senderName: msg.from.username || msg.from.first_name || 'Unknown',
-            timestamp: new Date(msg.date * 1000).toISOString(),
-            platform: 'telegram'
-          };
-          this.messages.push(formattedMsg);
-          logger.info({ chatId: ctx.chat.id, text: msg.text }, 'New Telegram message received');
-        }
+        (async () => {
+          let attachments = [];
+          if (msg.photo || msg.document || msg.video || msg.audio || msg.voice) {
+            const fileObj = msg.photo ? msg.photo[msg.photo.length - 1] : (msg.document || msg.video || msg.audio || msg.voice);
+            try {
+              const fileUrl = await ctx.telegram.getFileLink(fileObj.file_id);
+              const response = await fetch(fileUrl);
+              const buffer = await response.arrayBuffer();
+              const fileName = fileObj.file_name || `${fileObj.file_id}.${fileUrl.pathname.split('.').pop() || 'dat'}`;
+              const fileId = `${Date.now()}-${fileObj.file_id}`;
+              const finalName = `${fileId}_${fileName}`;
+              const finalPath = path.join(MEDIA_DIR, finalName);
+              fs.writeFileSync(finalPath, Buffer.from(buffer));
+              
+              const mediaType = msg.photo ? 'image' : msg.video ? 'video' : msg.audio || msg.voice ? 'audio' : 'document';
+              attachments.push({
+                id: fileId,
+                type: mediaType === 'image' ? 'image' : 'document',
+                mediaType,
+                url: `/media/${finalName}`,
+                name: fileName,
+                size: (fileObj.file_size || 0).toString(),
+                mimetype: fileObj.mime_type
+              });
+            } catch (err) {
+              logger.error({ err: err.message }, 'Failed to download Telegram media');
+            }
+          }
+
+          if (msg.text || msg.caption || attachments.length > 0) {
+            const formattedMsg = {
+              id: msg.message_id,
+              chatId: ctx.chat.id,
+              text: msg.text || msg.caption || '',
+              sender: msg.from.id === ctx.botInfo.id ? 'me' : 'other',
+              senderName: msg.from.username || msg.from.first_name || 'Unknown',
+              timestamp: new Date(msg.date * 1000).toISOString(),
+              platform: 'telegram',
+              attachments: attachments.length > 0 ? attachments : undefined
+            };
+            this.messages.push(formattedMsg);
+            logger.info({ chatId: ctx.chat.id, text: formattedMsg.text, hasMedia: attachments.length > 0 }, 'New Telegram message received');
+          }
+        })();
       });
 
       this.bot.launch().then(() => {
@@ -76,18 +113,37 @@ class TelegramService {
     }
   }
 
-  async sendMessage(chatId, text) {
+  async sendMessage(chatId, text, options = {}) {
     if (!this.bot || !this.isConnected) {
       throw new Error('Telegram bot is not connected');
     }
     
     try {
-      const sentMsg = await this.bot.telegram.sendMessage(chatId, text);
+      let sentMsg;
+      if (options.attachments && options.attachments.length > 0) {
+        const att = options.attachments[0];
+        const fileName = att.url.split('/').pop();
+        const filePath = path.join(MEDIA_DIR, fileName);
+        if (fs.existsSync(filePath)) {
+          if (att.type === 'image' || att.mediaType === 'image') {
+            sentMsg = await this.bot.telegram.sendPhoto(chatId, { source: fs.createReadStream(filePath) }, { caption: text });
+          } else if (att.mediaType === 'video') {
+            sentMsg = await this.bot.telegram.sendVideo(chatId, { source: fs.createReadStream(filePath) }, { caption: text });
+          } else {
+            sentMsg = await this.bot.telegram.sendDocument(chatId, { source: fs.createReadStream(filePath) }, { caption: text });
+          }
+        } else {
+          sentMsg = await this.bot.telegram.sendMessage(chatId, text);
+        }
+      } else {
+        sentMsg = await this.bot.telegram.sendMessage(chatId, text);
+      }
       
       const formattedMsg = {
         id: sentMsg.message_id,
         chatId: chatId,
-        text: sentMsg.text,
+        text: sentMsg.text || sentMsg.caption || '',
+        attachments: options.attachments,
         sender: 'me',
         senderName: 'Me',
         timestamp: new Date(sentMsg.date * 1000).toISOString(),

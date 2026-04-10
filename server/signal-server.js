@@ -15,7 +15,7 @@ import { verifyToken } from './auth/jwt.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data-signal');
 const AVATARS_DIR = join(DATA_DIR, 'avatars');
-const MEDIA_DIR = join(DATA_DIR, 'media');
+const MEDIA_DIR = join(__dirname, 'data', 'media');
 const SIGNAL_CLI_PATH = join(__dirname, 'signal-cli', 'signal-cli-0.13.24', 'bin', 'signal-cli');
 const SIGNAL_CONFIG_DIR = join(__dirname, 'signal-config');
 
@@ -409,7 +409,43 @@ function handleIncomingMessage(sessionId, params) {
 
     // Handle attachments
     if (dataMessage.attachments && dataMessage.attachments.length > 0) {
-      // TODO: Download and save attachments
+      const configDir = join(SIGNAL_CONFIG_DIR, sessionId);
+      const attachmentsList = [];
+      for (const att of dataMessage.attachments) {
+        // signal-cli typically provides storedFilename or id
+        const storedFile = att.storedFilename || (att.id ? join(configDir, 'attachments', att.id) : null);
+        if (storedFile && existsSync(storedFile)) {
+          const fileId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+          const fileName = att.filename || fileId;
+          const finalName = `${fileId}_${fileName}`;
+          const finalPath = join(MEDIA_DIR, finalName);
+          
+          try {
+            fs.copyFileSync(storedFile, finalPath);
+            const mediaType = att.contentType?.startsWith('image') ? 'image' : 
+                              att.contentType?.startsWith('video') ? 'video' : 
+                              att.contentType?.startsWith('audio') ? 'audio' : 'document';
+            attachmentsList.push({
+              id: fileId,
+              type: mediaType === 'image' ? 'image' : 'document',
+              mediaType,
+              url: `/media/${finalName}`,
+              name: fileName,
+              size: (att.size || 0).toString(),
+              mimetype: att.contentType
+            });
+          } catch (e) {
+            console.error(`[${sessionId}] Failed to copy attachment:`, e);
+          }
+        }
+      }
+      
+      if (attachmentsList.length > 0) {
+        msgData.attachments = attachmentsList;
+        msgData.media = attachmentsList[0].url; // For backwards compatibility
+        msgData.type = attachmentsList[0].type === 'image' ? 'image' : 'document';
+        msgData.hasMedia = true;
+      }
     }
 
     saveMessage(sessionId, chatId, msgData);
