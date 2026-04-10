@@ -19,7 +19,7 @@ import { emailService } from './services/emailService.js';
 import { slackService } from './services/slackService.js';
 import { slackRouter } from './routes/slack.js';
 import { authenticate } from './auth/middleware.js';
-import { join, dirname } from 'path';
+import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 
 // Load environment variables
@@ -176,7 +176,7 @@ app.use('/media', authenticate, express.static(MEDIA_DIR));
 const upload = multer({ dest: MEDIA_DIR });
 app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const ext = req.file.originalname.substring(req.file.originalname.lastIndexOf('.'));
+  const ext = extname(req.file.originalname);
   const finalName = req.file.filename + ext;
   fs.renameSync(req.file.path, join(MEDIA_DIR, finalName));
   res.json({ url: `/media/${finalName}`, type: req.file.mimetype, size: req.file.size, name: req.file.originalname });
