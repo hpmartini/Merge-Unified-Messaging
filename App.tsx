@@ -1,12 +1,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { useAppStore } from './src/store/useAppStore';
-import Sidebar from './src/components/Sidebar';
-import { ChatArea } from './src/components/ChatArea';
-import MediaGallery from './components/MediaGallery';
-import Lightbox from './components/Lightbox';
-import PDFViewer from './components/PDFViewer';
-import SettingsModal from './components/SettingsModal';
-import { User, Message, Platform, Attachment } from './types';
+import { MainLayout } from './src/layouts/MainLayout';
+import { Platform } from './types';
 import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp';
 import { useSignal, SignalChat, SignalMessage } from './hooks/useSignal';
 import { useTelegram, TelegramChat, TelegramMessage } from './hooks/useTelegram';
@@ -25,22 +20,11 @@ import { useUnifiedChatState } from './src/hooks/useUnifiedChatState';
 const App: React.FC = () => {
   const { mergeUsers, mergeMessages } = useUnifiedChatState();
 
-  // References for server ports
   const serverPortRef = useRef<number | null>(null);
   const signalServerPortRef = useRef<number | null>(null);
 
-  // --- State ---
-  const { users, setUsers } = useAppStore();
-  const { selectedUser, setSelectedUser } = useAppStore();
-  const { messages, setMessages } = useAppStore();
-  const { isGalleryOpen, setIsGalleryOpen } = useAppStore();
-  const { lightboxImage, setLightboxImage } = useAppStore();
-  const { activePDF, setActivePDF } = useAppStore();
-  const { showMobileChat } = useAppStore();
-  const { isSettingsOpen, setIsSettingsOpen } = useAppStore();
-  const { theme, setTheme } = useAppStore();
+  const { users, selectedUser, setSelectedUser, theme } = useAppStore();
 
-  // --- Telegram Integration ---
   const telegram = useTelegram({
     onChatsLoaded: useCallback((chats: TelegramChat[]) => {
       mergeUsers(chats.map(normalizeTelegramChat), Platform.Telegram);
@@ -50,7 +34,6 @@ const App: React.FC = () => {
     }, [mergeMessages])
   });
 
-  // --- Email Integration ---
   const email = useEmail({
     onChatsLoaded: useCallback((chats: EmailChat[]) => {
       mergeUsers(chats.map(normalizeEmailChat), Platform.Email);
@@ -60,7 +43,6 @@ const App: React.FC = () => {
     }, [mergeMessages])
   });
 
-  // --- Slack Integration ---
   const slack = useSlack({
     onChatsLoaded: useCallback((chats: SlackChat[]) => {
       mergeUsers(chats.map(normalizeSlackChat), Platform.Slack);
@@ -70,11 +52,9 @@ const App: React.FC = () => {
     }, [mergeMessages])
   });
 
-  // --- WhatsApp Integration ---
   const whatsapp = useWhatsApp('merge-app', {
     onMessage: useCallback((waMsg: WhatsAppMessage) => {
-      // Need chatId from waMsg, WhatsAppMessage has contactId? Wait, App.tsx used waMsg.contactId
-      const chatId = waMsg.contactId || waMsg.id.split('_')[0]; // fallback
+      const chatId = waMsg.contactId || waMsg.id.split('_')[0];
       mergeMessages([normalizeWhatsAppMessage(waMsg, chatId, serverPortRef.current)]);
     }, [mergeMessages]),
     onChatsLoaded: useCallback((chats: WhatsAppChat[]) => {
@@ -90,7 +70,6 @@ const App: React.FC = () => {
     if (whatsapp.serverPort) serverPortRef.current = whatsapp.serverPort;
   }, [whatsapp.serverPort]);
 
-  // --- Signal Integration ---
   const signal = useSignal('merge-app', {
     onMessage: useCallback((sigMsg: SignalMessage) => {
       const chatId = sigMsg.contactId || sigMsg.id; 
@@ -109,19 +88,13 @@ const App: React.FC = () => {
     if (signal.serverPort) signalServerPortRef.current = signal.serverPort;
   }, [signal.serverPort]);
 
-  // --- Effects ---
-
   useEffect(() => {
-    const timer = setTimeout(() => {
-      whatsapp.connect();
-    }, 500);
+    const timer = setTimeout(() => { whatsapp.connect(); }, 500);
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      signal.connect();
-    }, 1000);
+    const timer = setTimeout(() => { signal.connect(); }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
@@ -134,64 +107,28 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!selectedUser) return;
 
-    const whatsappIds = [
-      ...(selectedUser.id.startsWith('wa-') ? [selectedUser.id] : []),
-      ...(selectedUser.alternateIds?.filter(id => id.startsWith('wa-')) || [])
-    ];
-    if (whatsapp.status === 'ready') {
-      for (const waId of whatsappIds) {
-        whatsapp.getMessages(waId.replace('wa-', '') + '@c.us', 100);
+    const loadPlatformMessages = (ids: string[], status: string, getMessages: any, isSignal = false, isWa = false) => {
+      if (status === 'ready' || (isSignal && signal.chats.length > 0)) {
+        for (const id of ids) {
+          const chatId = isWa ? id.replace('wa-', '') + '@c.us' : id.replace(/^[a-z]+-/, '');
+          if (isSignal || isWa) getMessages(chatId, 100);
+          else getMessages(chatId);
+        }
       }
-    }
+    };
 
-    const tgIds = [
-      ...(selectedUser.id.startsWith('tg-') ? [selectedUser.id] : []),
-      ...(selectedUser.alternateIds?.filter(id => id.startsWith('tg-')) || [])
-    ];
-    if (telegram.status === 'ready') {
-      for (const tgId of tgIds) {
-        telegram.getMessages(tgId.replace('tg-', ''));
-      }
-    }
-
-    const emailIds = [
-      ...(selectedUser.id.startsWith('email-') ? [selectedUser.id] : []),
-      ...(selectedUser.alternateIds?.filter(id => id.startsWith('email-')) || [])
-    ];
-    if (email.status === 'ready') {
-      for (const emailId of emailIds) {
-        email.getMessages(emailId.replace('email-', ''));
-      }
-    }
-
-    const slackIds = [
-      ...(selectedUser.id.startsWith('slack-') ? [selectedUser.id] : []),
-      ...(selectedUser.alternateIds?.filter(id => id.startsWith('slack-')) || [])
-    ];
-    if (slack.status === 'ready') {
-      for (const slackId of slackIds) {
-        slack.getMessages(slackId.replace('slack-', ''));
-      }
-    }
-
-    const signalIds = [
-      ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
-      ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
-    ];
-    if (signal.status === 'ready' || signal.chats.length > 0) {
-      for (const sigId of signalIds) {
-        signal.getMessages(sigId.replace('sig-', ''), 100);
-      }
-    }
+    loadPlatformMessages([...(selectedUser.id.startsWith('wa-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('wa-')) || [])], whatsapp.status, whatsapp.getMessages, false, true);
+    loadPlatformMessages([...(selectedUser.id.startsWith('tg-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('tg-')) || [])], telegram.status, telegram.getMessages);
+    loadPlatformMessages([...(selectedUser.id.startsWith('email-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('email-')) || [])], email.status, email.getMessages);
+    loadPlatformMessages([...(selectedUser.id.startsWith('slack-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('slack-')) || [])], slack.status, slack.getMessages);
+    loadPlatformMessages([...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])], signal.status, signal.getMessages, true);
   }, [selectedUser?.id, selectedUser?.alternateIds, whatsapp.status, signal.status, signal.chats.length, telegram.status, email.status, slack.status, whatsapp.getMessages, signal.getMessages, telegram.getMessages, email.getMessages, slack.getMessages]);
 
   const hasPreloadedWA = useRef(false);
   useEffect(() => {
     if (whatsapp.status === 'ready' && whatsapp.chats.length > 0 && !hasPreloadedWA.current) {
       hasPreloadedWA.current = true;
-      for (const chat of whatsapp.chats.slice(0, 20)) {
-        whatsapp.getMessages(chat.id, 50);
-      }
+      for (const chat of whatsapp.chats.slice(0, 20)) { whatsapp.getMessages(chat.id, 50); }
     }
   }, [whatsapp.status, whatsapp.chats, whatsapp.getMessages]);
 
@@ -199,9 +136,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if ((signal.status === 'ready' || signal.chats.length > 0) && signal.chats.length > 0 && !hasPreloadedSignal.current) {
       hasPreloadedSignal.current = true;
-      for (const chat of signal.chats.slice(0, 20)) {
-        signal.getMessages(chat.id, 50);
-      }
+      for (const chat of signal.chats.slice(0, 20)) { signal.getMessages(chat.id, 50); }
     }
   }, [signal.status, signal.chats, signal.getMessages]);
 
@@ -209,9 +144,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (email.status === 'ready' && email.chats.length > 0 && !hasPreloadedEmail.current) {
       hasPreloadedEmail.current = true;
-      for (const chat of email.chats.slice(0, 20)) {
-        email.getMessages(chat.id);
-      }
+      for (const chat of email.chats.slice(0, 20)) { email.getMessages(chat.id); }
     }
   }, [email.status, email.chats, email.getMessages]);
 
@@ -219,32 +152,20 @@ const App: React.FC = () => {
   useEffect(() => {
     if (slack.status === 'ready' && slack.chats.length > 0 && !hasPreloadedSlack.current) {
       hasPreloadedSlack.current = true;
-      for (const chat of slack.chats.slice(0, 20)) {
-        slack.getMessages(chat.id);
-      }
+      for (const chat of slack.chats.slice(0, 20)) { slack.getMessages(chat.id); }
     }
   }, [slack.status, slack.chats, slack.getMessages]);
 
   useEffect(() => {
     if (!selectedUser) return;
     const interval = setInterval(() => {
-      const signalIds = [
-        ...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []),
-        ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])
-      ];
+      const signalIds = [...(selectedUser.id.startsWith('sig-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('sig-')) || [])];
       if ((signal.status === 'ready' || signal.chats.length > 0) && signalIds.length > 0) {
-        for (const sigId of signalIds) {
-          signal.getMessages(sigId.replace('sig-', ''), 100);
-        }
+        for (const sigId of signalIds) { signal.getMessages(sigId.replace('sig-', ''), 100); }
       }
-      const waIds = [
-        ...(selectedUser.id.startsWith('wa-') ? [selectedUser.id] : []),
-        ...(selectedUser.alternateIds?.filter(id => id.startsWith('wa-')) || [])
-      ];
+      const waIds = [...(selectedUser.id.startsWith('wa-') ? [selectedUser.id] : []), ...(selectedUser.alternateIds?.filter(id => id.startsWith('wa-')) || [])];
       if (whatsapp.status === 'ready' && waIds.length > 0) {
-        for (const waId of waIds) {
-          whatsapp.getMessages(waId.replace('wa-', '') + '@c.us', 100);
-        }
+        for (const waId of waIds) { whatsapp.getMessages(waId.replace('wa-', '') + '@c.us', 100); }
       }
     }, 30000);
     return () => clearInterval(interval);
@@ -254,56 +175,7 @@ const App: React.FC = () => {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const handleDocumentAction = (att: Attachment) => {
-    if (att.name.toLowerCase().endsWith('.pdf')) {
-      setActivePDF(att);
-    } else {
-      const link = document.createElement('a');
-      link.href = att.url;
-      link.download = att.name;
-      link.click();
-    }
-  };
-
-  return (
-    <div className="flex h-screen bg-theme-base text-theme-main overflow-hidden font-sans selection:bg-blue-500/30">
-      
-      <div className={`${showMobileChat ? 'hidden' : 'flex'} w-full md:w-auto md:flex h-full`}>
-        <Sidebar />
-      </div>
-
-      <div className={`${showMobileChat ? 'flex' : 'hidden'} md:flex flex-1 flex-col min-w-0 relative bg-theme-base`}>
-        <ChatArea whatsapp={whatsapp} signal={signal} telegram={telegram} email={email} slack={slack} />
-      </div>
-
-      <MediaGallery 
-        isOpen={isGalleryOpen} 
-        onClose={() => setIsGalleryOpen(false)} 
-        messages={messages.filter((m: Message) => selectedUser && new Set([selectedUser.id, ...(selectedUser.alternateIds || [])]).has(m.userId))} 
-        onImageClick={setLightboxImage}
-        onDocView={handleDocumentAction}
-      />
-
-      <Lightbox 
-        attachment={lightboxImage} 
-        onClose={() => setLightboxImage(null)} 
-      />
-
-      <PDFViewer 
-        attachment={activePDF} 
-        onClose={() => setActivePDF(null)} 
-      />
-
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        currentTheme={theme}
-        onSetTheme={setTheme}
-        whatsapp={whatsapp}
-        signal={signal}
-      />
-    </div>
-  );
+  return <MainLayout whatsapp={whatsapp} signal={signal} telegram={telegram} email={email} slack={slack} />;
 };
 
 export default App;
