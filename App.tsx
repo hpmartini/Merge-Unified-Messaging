@@ -216,10 +216,8 @@ const App: React.FC = () => {
     // (WhatsApp can have multiple chat entries for the same contact, e.g. @c.us and @lid)
     const waUserMap = new Map<string, User>();
     for (const chat of chats) {
-      if (chat.isGroup) continue;
-
       const normalizedName = normalizeName(chat.name);
-      const chatIdClean = chat.id.replace('@c.us', '').replace('@lid', '');
+      const chatIdClean = chat.id.replace('@c.us', '').replace('@lid', '').replace('@g.us', '');
       const waId = `wa-${chatIdClean}`;
 
       let avatarUrl: string | undefined;
@@ -243,10 +241,10 @@ const App: React.FC = () => {
         waUserMap.set(normalizedName, {
           id: waId,
           name: chat.name,
-          avatarInitials: chat.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase(),
+          avatarInitials: chat.name.split(' ').filter(n => n.length > 0).map(n => n[0]).join('').substring(0, 2).toUpperCase() || '??',
           avatarUrl,
           activePlatforms: [Platform.WhatsApp],
-          role: 'WhatsApp Contact',
+          role: chat.isGroup ? 'WhatsApp Group' : 'WhatsApp Contact',
           lastMessageTime: chatTime
         });
       }
@@ -276,9 +274,8 @@ const App: React.FC = () => {
           continue;
         }
 
-        // Then check by name match (for cross-platform merge)
-        const normalizedWaName = normalizeName(waUser.name);
-        const existingByNameIdx = mergedUsers.findIndex(u => normalizeName(u.name) === normalizedWaName);
+        // Then check by intelligent merge match (for cross-platform merge)
+        const existingByNameIdx = mergedUsers.findIndex(u => isSameContact(u, waUser));
 
         if (existingByNameIdx !== -1) {
           // Merge: add WhatsApp platform to existing user (e.g. Signal contact)
@@ -394,17 +391,54 @@ const App: React.FC = () => {
     });
   }, []);
 
-  // Helper to check if a name looks like a proper name (not a UUID, phone number only, etc.)
+  // Helper to check if a name looks like a proper name (not a UUID)
   const isProperName = (name: string): boolean => {
     if (!name || !name.trim()) return false;
     const trimmed = name.trim();
     // Skip UUIDs (like d1de889c-9889-4c9a-81ce-29a6efeb3571)
     if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(trimmed)) return false;
-    // Skip pure phone numbers (but allow names with phone numbers)
-    if (/^\+?[\d\s-]+$/.test(trimmed)) return false;
     // Skip very short names (likely initials or codes)
     if (trimmed.length < 2) return false;
     return true;
+  };
+
+  // Helper to extract digits for phone matching
+  const extractPhone = (str: string): string => {
+    return str.replace(/\\D/g, '');
+  };
+
+  // Helper to check if two names are a fuzzy match
+  const isFuzzyNameMatch = (name1: string, name2: string): boolean => {
+    const n1 = normalizeName(name1);
+    const n2 = normalizeName(name2);
+    if (!n1 || !n2) return false;
+    if (n1 === n2) return true;
+    
+    if (n1.length > 5 && n2.includes(n1)) return true;
+    if (n2.length > 5 && n1.includes(n2)) return true;
+    
+    return false;
+  };
+
+  // Helper to check if two contacts are the same
+  const isSameContact = (existing: User, newUser: {name: string, id: string}) => {
+    if (isFuzzyNameMatch(existing.name, newUser.name)) return true;
+
+    const p1 = extractPhone(existing.id);
+    const p2 = extractPhone(newUser.id);
+    
+    if (p1.length > 7 && p2.length > 7) {
+      if (p1.endsWith(p2) || p2.endsWith(p1) || p1 === p2) return true;
+    }
+    
+    if (existing.alternateIds) {
+      for (const altId of existing.alternateIds) {
+         const pAlt = extractPhone(altId);
+         if (pAlt.length > 7 && p2.length > 7 && (pAlt.endsWith(p2) || p2.endsWith(pAlt))) return true;
+      }
+    }
+    
+    return false;
   };
 
   // Helper to normalize name for matching (merge contacts)
@@ -416,14 +450,16 @@ const App: React.FC = () => {
     if (!chats || chats.length === 0) return;
 
     const sigUsers: User[] = chats
-      .filter(chat => chat.name && chat.name.trim() && isProperName(chat.name))
       .map(chat => {
         let avatarUrl: string | undefined;
         if (chat.avatarUrl && signalServerPortRef.current) {
           avatarUrl = `http://localhost:${signalServerPortRef.current}${chat.avatarUrl}`;
         }
 
-        const name = chat.name.trim();
+        let name = chat.name ? chat.name.trim() : '';
+        if (!name || !isProperName(name)) {
+          name = chat.isGroup ? 'Unknown Group' : `Unknown Number: ${chat.id}`;
+        }
         let avatarInitials: string;
 
         if (chat.isGroup) {
@@ -472,9 +508,8 @@ const App: React.FC = () => {
           continue;
         }
 
-        // Then check by name match (case-insensitive)
-        const normalizedSigName = normalizeName(sigUser.name);
-        const existingIdx = mergedUsers.findIndex(u => normalizeName(u.name) === normalizedSigName);
+        // Then check by intelligent merge match
+        const existingIdx = mergedUsers.findIndex(u => isSameContact(u, sigUser));
 
         if (existingIdx !== -1) {
           // Merge: add Signal platform to existing user
