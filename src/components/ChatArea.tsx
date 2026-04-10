@@ -151,13 +151,14 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
       if (emailId) targetChatId = emailId.replace('email-', '');
     }
 
+    const rawMsgId = targetChatId ? `${now}_${targetChatId}_sent` : now.toString();
     const msgId = targetChatId
-      ? (platform === Platform.Signal ? `sig-${now}_${targetChatId}_sent` : 
-         platform === Platform.WhatsApp ? `wa-${now}_${targetChatId}_sent` :
-         platform === Platform.Slack ? `slack-${now}_${targetChatId}_sent` :
-         platform === Platform.Email ? `email-${now}_${targetChatId}_sent` :
-         `tg-${now}_${targetChatId}_sent`)
-      : now.toString();
+      ? (platform === Platform.Signal ? `sig-${rawMsgId}` : 
+         platform === Platform.WhatsApp ? `wa-${rawMsgId}` :
+         platform === Platform.Slack ? `slack-${rawMsgId}` :
+         platform === Platform.Email ? `email-${rawMsgId}` :
+         `tg-${rawMsgId}`)
+      : rawMsgId;
 
     const newMessage: Message = {
       id: msgId,
@@ -174,10 +175,10 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
     };
 
     if (platform === Platform.WhatsApp && whatsapp.status === 'ready' && targetChatId) {
-      whatsapp.sendMessage(targetChatId + '@c.us', content);
+      whatsapp.sendMessage(targetChatId + '@c.us', content, rawMsgId);
     }
     if (platform === Platform.Signal && (signal.status === 'ready' || signal.chats.length > 0) && targetChatId) {
-      signal.sendMessage(targetChatId, content);
+      signal.sendMessage(targetChatId, content, rawMsgId);
     }
     if (platform === Platform.Telegram && telegram?.status === 'ready' && targetChatId) {
       telegram.sendMessage(targetChatId, content);

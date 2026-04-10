@@ -56,7 +56,7 @@ interface UseWhatsAppReturn {
   serverPort: number | null;
   connect: () => void;
   disconnect: () => void;
-  sendMessage: (to: string, body: string) => void;
+  sendMessage: (to: string, body: string, messageId?: string) => void;
   getChats: () => void;
   getMessages: (chatId: string, limit?: number) => void;
   getCachedData: () => void;
@@ -289,13 +289,13 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
     setMessages(new Map());
   }, []);
 
-  const sendMessage = useCallback((to: string, body: string) => {
+  const sendMessage = useCallback((to: string, body: string, messageId?: string) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'send',
         to,
         body,
-        messageId: Date.now().toString()
+        messageId: messageId || Date.now().toString()
       }));
     }
   }, []);
