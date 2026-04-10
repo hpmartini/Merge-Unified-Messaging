@@ -31,9 +31,22 @@ const App: React.FC = () => {
       const mergedUsers = [...prev];
       const addedTgUsers: any[] = [];
       for (const tgUser of tgUsers) {
-        const existingIdx = mergedUsers.findIndex(u => u.id === tgUser.id || (u.alternateIds || []).includes(tgUser.id));
-        if (existingIdx !== -1) continue;
-        addedTgUsers.push(tgUser);
+        const userToMerge = tgUser;
+        const existingByIdIdx = mergedUsers.findIndex(u => u.id === userToMerge.id || (u.alternateIds || []).includes(userToMerge.id));
+        if (existingByIdIdx !== -1) continue;
+        const existingByNameIdx = mergedUsers.findIndex(u => isSameContact(u, userToMerge));
+        if (existingByNameIdx !== -1) {
+          const existing = mergedUsers[existingByNameIdx];
+          if (!existing.activePlatforms.includes(Platform.Telegram)) {
+            mergedUsers[existingByNameIdx] = {
+              ...existing,
+              activePlatforms: [...existing.activePlatforms, Platform.Telegram],
+              alternateIds: [...(existing.alternateIds || []), userToMerge.id]
+            };
+          }
+        } else {
+          addedTgUsers.push(userToMerge);
+        }
       }
       return [...mergedUsers, ...addedTgUsers];
     });
@@ -76,9 +89,22 @@ const App: React.FC = () => {
       const mergedUsers = [...prev];
       const addedUsers: any[] = [];
       for (const u of emailUsers) {
-        const existingIdx = mergedUsers.findIndex(existing => existing.id === u.id || (existing.alternateIds || []).includes(u.id));
-        if (existingIdx !== -1) continue;
-        addedUsers.push(u);
+        const userToMerge = u;
+        const existingByIdIdx = mergedUsers.findIndex(u => u.id === userToMerge.id || (u.alternateIds || []).includes(userToMerge.id));
+        if (existingByIdIdx !== -1) continue;
+        const existingByNameIdx = mergedUsers.findIndex(u => isSameContact(u, userToMerge));
+        if (existingByNameIdx !== -1) {
+          const existing = mergedUsers[existingByNameIdx];
+          if (!existing.activePlatforms.includes(Platform.Email)) {
+            mergedUsers[existingByNameIdx] = {
+              ...existing,
+              activePlatforms: [...existing.activePlatforms, Platform.Email],
+              alternateIds: [...(existing.alternateIds || []), userToMerge.id]
+            };
+          }
+        } else {
+          addedUsers.push(userToMerge);
+        }
       }
       return [...mergedUsers, ...addedUsers];
     });
@@ -123,9 +149,22 @@ const App: React.FC = () => {
       const mergedUsers = [...prev];
       const addedUsers: any[] = [];
       for (const u of slackUsers) {
-        const existingIdx = mergedUsers.findIndex(existing => existing.id === u.id || (existing.alternateIds || []).includes(u.id));
-        if (existingIdx !== -1) continue;
-        addedUsers.push(u);
+        const userToMerge = u;
+        const existingByIdIdx = mergedUsers.findIndex(u => u.id === userToMerge.id || (u.alternateIds || []).includes(userToMerge.id));
+        if (existingByIdIdx !== -1) continue;
+        const existingByNameIdx = mergedUsers.findIndex(u => isSameContact(u, userToMerge));
+        if (existingByNameIdx !== -1) {
+          const existing = mergedUsers[existingByNameIdx];
+          if (!existing.activePlatforms.includes(Platform.Slack)) {
+            mergedUsers[existingByNameIdx] = {
+              ...existing,
+              activePlatforms: [...existing.activePlatforms, Platform.Slack],
+              alternateIds: [...(existing.alternateIds || []), userToMerge.id]
+            };
+          }
+        } else {
+          addedUsers.push(userToMerge);
+        }
       }
       return [...mergedUsers, ...addedUsers];
     });
