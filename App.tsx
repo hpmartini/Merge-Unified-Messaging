@@ -11,6 +11,7 @@ import { User, Message, Platform, Attachment } from './types';
 import { useWhatsApp, WhatsAppChat, WhatsAppMessage } from './hooks/useWhatsApp';
 import { useSignal, SignalChat, SignalMessage } from './hooks/useSignal';
 import { useTelegram, TelegramChat, TelegramMessage } from './hooks/useTelegram';
+import { isSameContact, isProperName } from "./src/utils/contacts";
 import { useEmail, EmailChat, EmailMessage } from './src/hooks/useEmail';
 import { useSlack, SlackChat, SlackMessage } from './src/hooks/useSlack';
 
@@ -396,62 +397,6 @@ const App: React.FC = () => {
   }, []);
 
   // Helper to check if a name looks like a proper name (not a UUID)
-  const isProperName = (name: string): boolean => {
-    if (!name || !name.trim()) return false;
-    const trimmed = name.trim();
-    // Skip UUIDs (like d1de889c-9889-4c9a-81ce-29a6efeb3571)
-    if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(trimmed)) return false;
-    // Skip very short names (likely initials or codes)
-    if (trimmed.length < 2) return false;
-    return true;
-  };
-
-  // Helper to extract digits for phone matching
-  const extractPhone = (str: string): string => {
-    if (!str) return '';
-    return str.replace(/\D/g, '');
-  };
-
-  // Helper to check if two names are a fuzzy match
-  const isFuzzyNameMatch = (name1: string, name2: string): boolean => {
-    const n1 = normalizeName(name1);
-    const n2 = normalizeName(name2);
-    if (!n1 || !n2) return false;
-    if (n1 === n2) return true;
-    
-    if (n1.length > 5 && n2.includes(n1)) return true;
-    if (n2.length > 5 && n1.includes(n2)) return true;
-    
-    return false;
-  };
-
-  // Helper to check if two contacts are the same
-  const isSameContact = (existing: User, newUser: {name: string, id: string}) => {
-    if (isFuzzyNameMatch(existing.name, newUser.name)) return true;
-
-    const p1 = extractPhone(existing.id);
-    const p2 = extractPhone(newUser.id);
-    
-    if (p1.length > 7 && p2.length > 7) {
-      if (p1.endsWith(p2) || p2.endsWith(p1) || p1 === p2) return true;
-    }
-    
-    if (existing.alternateIds) {
-      for (const altId of existing.alternateIds) {
-         const pAlt = extractPhone(altId);
-         if (pAlt.length > 7 && p2.length > 7 && (pAlt.endsWith(p2) || p2.endsWith(pAlt))) return true;
-      }
-    }
-    
-    return false;
-  };
-
-  // Helper to normalize name for matching (merge contacts)
-  const normalizeName = (name: string): string => {
-    if (!name) return '';
-    return name.trim().toLowerCase().replace(/\s+/g, ' ');
-  };
-
   const handleSignalChatsLoaded = useCallback((chats: SignalChat[]) => {
     if (!chats || chats.length === 0) return;
 
