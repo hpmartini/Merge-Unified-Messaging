@@ -444,7 +444,7 @@ function setupWebSocket() {
             const sentTs = msg.messageId || Date.now().toString();
             const contactIdClean = chatId.replace('@c.us', '');
             const sentMsgData = {
-              id: `${sentTs}_${contactIdClean}_sent`,
+              id: msg.messageId || `${sentTs}_${contactIdClean}_sent`,
               from: chatId,
               to: chatId,
               body: msg.body,

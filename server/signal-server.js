@@ -889,7 +889,7 @@ function setupWebSocket() {
               // Save sent message to cache — use client's messageId for cross-tab ID consistency
               const sentTs = msg.messageId || Date.now().toString();
               const sentMessage = {
-                id: `${sentTs}_${msg.to}_sent`,
+                id: msg.messageId || `${sentTs}_${msg.to}_sent`,
                 from: msg.to,
                 to: msg.to,
                 body: msg.body,
@@ -1021,17 +1021,14 @@ function setupWebSocket() {
           const cachedMessages = loadData(sessionId, 'messages');
           const chatMessages = cachedMessages[msg.chatId] || [];
 
-          if (chatMessages.length > 0) {
-            broadcastToSession(sessionId, {
-              type: 'messages',
-              chatId: msg.chatId,
-              messages: chatMessages,
-              cached: true
-            });
-          }
-
           // Signal doesn't support fetching historical messages via signal-cli
-          // Messages are only received in real-time
+          // The local cache is the definitive source of truth, so return as cached: false
+          broadcastToSession(sessionId, {
+            type: 'messages',
+            chatId: msg.chatId,
+            messages: chatMessages,
+            cached: false
+          });
           break;
 
         case 'getCachedData':
