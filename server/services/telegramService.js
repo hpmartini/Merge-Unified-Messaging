@@ -19,6 +19,17 @@ const TelegramEnvSchema = z.object({
 });
 
 class TelegramService {
+  async sendReaction(chatId, messageId, reaction) {
+    if (!this.bot || !this.isConnected) return false;
+    try {
+      await this.bot.telegram.setMessageReaction(chatId, messageId, [{ type: 'emoji', emoji: reaction }]);
+      return true;
+    } catch (err) {
+      console.error('Failed to send Telegram reaction', err);
+      return false;
+    }
+  }
+
   constructor() {
     this.bot = null;
     this.messages = [];
@@ -33,6 +44,21 @@ class TelegramService {
       const token = env.TELEGRAM_BOT_TOKEN;
 
       this.bot = new Telegraf(token);
+
+      
+      this.bot.on('message_reaction', (ctx) => {
+        const reactionMsg = ctx.update.message_reaction;
+        const msgId = reactionMsg.message_id;
+        const chatId = reactionMsg.chat.id;
+        const emojis = reactionMsg.new_reaction.map(r => r.emoji).join('');
+        
+        // Broadcast generic WebSocket event if implemented or just update memory
+        const msg = this.messages.find(m => m.id === msgId && m.chatId === chatId);
+        if (msg) {
+          if (!msg.reactions) msg.reactions = [];
+          msg.reactions.push({ emoji: emojis, sender: reactionMsg.actor_chat ? reactionMsg.actor_chat.id : 'other' });
+        }
+      });
 
       this.bot.on('message', (ctx) => {
         const msg = ctx.message;
@@ -84,6 +110,7 @@ class TelegramService {
               sender: msg.from.id === ctx.botInfo.id ? 'me' : 'other',
               senderName: msg.from.username || msg.from.first_name || 'Unknown',
               timestamp: new Date(msg.date * 1000).toISOString(),
+              reactions: [],
               platform: 'telegram',
               attachments: attachments.length > 0 ? attachments : undefined
             };

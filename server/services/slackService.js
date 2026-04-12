@@ -20,6 +20,17 @@ const SlackEnvSchema = z.object({
 });
 
 class SlackService {
+  async sendReaction(chatId, messageId, reaction) {
+    if (!this.app || !this.isConnected) return false;
+    try {
+      await this.app.client.reactions.add({ channel: chatId, name: reaction, timestamp: messageId });
+      return true;
+    } catch (err) {
+      console.error('Failed to send Slack reaction', err);
+      return false;
+    }
+  }
+
   constructor() {
     this.app = null;
     this.messages = [];
@@ -39,6 +50,19 @@ class SlackService {
       });
 
       // Handle message events
+      
+      this.app.event('reaction_added', async ({ event }) => {
+        const msgId = event.item.ts;
+        const chatId = event.item.channel;
+        const emoji = event.reaction;
+        
+        const msg = this.messages.find(m => m.id === msgId && m.chatId === chatId);
+        if (msg) {
+          if (!msg.reactions) msg.reactions = [];
+          msg.reactions.push({ emoji, sender: event.user });
+        }
+      });
+
       this.app.message(async ({ message, say }) => {
         // Skip bot messages
         if (message.bot_id) return;
