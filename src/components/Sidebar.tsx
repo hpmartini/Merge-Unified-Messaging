@@ -1,27 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { PLATFORM_CONFIG } from '../../constants';
-import { GitBranch, Search, X, Clock, Settings, Hash } from 'lucide-react';
+import { GitBranch, Search, X, Settings } from 'lucide-react';
 import { Message } from '../../types';
-
-// Format relative time (e.g., "2m", "1h", "Yesterday", "Mar 12")
-const formatRelativeTime = (date: Date | undefined): string => {
-  if (!date) return '';
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'now';
-  if (diffMins < 60) return `${diffMins}m`;
-  if (diffHours < 24) return `${diffHours}h`;
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) {
-    return date.toLocaleDateString('de-DE', { weekday: 'short' });
-  }
-  return date.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' });
-};
+import { UserList } from './SidebarComponents/UserList';
+import { MessageSearchResults } from './SidebarComponents/MessageSearchResults';
 
 const Sidebar: React.FC = () => {
   const { 
@@ -154,76 +136,11 @@ const Sidebar: React.FC = () => {
               <span>Contacts</span>
               <span className="text-[9px] bg-theme-base px-1.5 rounded-full">{sortedUsers.length}</span>
             </div>
-            <ul className="md:px-1 lg:px-0">
-              {sortedUsers.map(user => (
-                <li key={user.id}>
-                  <button
-                    onClick={() => handleUserSelection(user)}
-                    className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
-                      selectedUser?.id === user.id
-                        ? 'bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-blue-500'
-                        : 'hover:bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-transparent'
-                    }`}
-                  >
-                    {user.avatarUrl ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt={user.name}
-                        className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${
-                          selectedUser?.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
-                        }`}
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                        }}
-                      />
-                    ) : null}
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${user.avatarUrl ? 'hidden' : ''} ${
-                       selectedUser?.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
-                    }`}>
-                      {user.avatarInitials}
-                    </div>
-
-                    {/* Platform dots - below avatar in collapsed mode */}
-                    <div className="hidden md:flex lg:hidden items-center justify-center gap-1 mt-0.5">
-                      {user.activePlatforms.slice(0, 4).map(p => (
-                        <div
-                          key={p}
-                          className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`}
-                          title={PLATFORM_CONFIG[p].label}
-                        />
-                      ))}
-                    </div>
-
-                    {/* Full info - hidden in collapsed mode */}
-                    <div className="flex-1 min-w-0 md:hidden lg:block">
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-theme-main truncate text-sm flex items-center gap-1">
-                          {user.role === 'Slack Channel' && <Hash className="w-3.5 h-3.5 text-theme-muted" />}
-                          {user.name}
-                        </span>
-                        {user.lastMessageTime && (
-                          <span className="text-[10px] text-theme-muted font-mono flex-shrink-0 ml-2">
-                            {formatRelativeTime(user.lastMessageTime)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        {user.activePlatforms.slice(0, 3).map(p => (
-                          <div
-                            key={p}
-                            className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`}
-                            title={PLATFORM_CONFIG[p].label}
-                          />
-                        ))}
-                        {user.activePlatforms.length > 3 && <span className="text-[9px] text-theme-muted">+{user.activePlatforms.length - 3}</span>}
-                        <span className="text-[11px] text-theme-muted ml-1 truncate font-medium">{user.role}</span>
-                      </div>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <UserList 
+              users={sortedUsers} 
+              selectedUser={selectedUser} 
+              onSelectUser={handleUserSelection} 
+            />
           </>
         ) : (
           <div className="animate-in fade-in slide-in-from-bottom-2">
@@ -234,60 +151,16 @@ const Sidebar: React.FC = () => {
                   <span>Contacts</span>
                   <span className="text-[9px] bg-green-600/20 text-green-400 border border-green-500/20 px-1.5 rounded-full">{filteredUsers.length}</span>
                 </div>
-                <ul className="md:px-1 lg:px-0 mb-4">
-                  {filteredUsers.map(user => (
-                    <li key={user.id}>
-                      <button
-                        onClick={() => {
-                          handleUserSelection(user);
-                          setGlobalSearchQuery('');
-                        }}
-                        className={`w-full text-left px-3 py-3 md:px-0 md:py-2 lg:px-3 lg:py-3 rounded-md flex items-center gap-3 md:flex-col md:gap-1 lg:flex-row lg:gap-3 transition-all ${
-                          selectedUser?.id === user.id
-                            ? 'bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-blue-500'
-                            : 'hover:bg-theme-hover border-l-2 md:border-l-0 lg:border-l-2 border-transparent'
-                        }`}
-                      >
-                        {user.avatarUrl ? (
-                          <img
-                            src={user.avatarUrl}
-                            alt={user.name}
-                            className={`w-10 h-10 rounded-full object-cover flex-shrink-0 ${
-                              selectedUser?.id === user.id ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-theme-panel' : ''
-                            }`}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                        ) : null}
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner flex-shrink-0 ${user.avatarUrl ? 'hidden' : ''} ${
-                           selectedUser?.id === user.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40' : 'bg-theme-base border border-theme text-theme-main'
-                        }`}>
-                          {user.avatarInitials}
-                        </div>
-                        <div className="flex-1 min-w-0 md:hidden lg:block">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-theme-main truncate text-sm flex items-center gap-1">
-                              {user.role === 'Slack Channel' && <Hash className="w-3.5 h-3.5 text-theme-muted" />}
-                              {highlightText(user.name, globalSearchQuery)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            {user.activePlatforms.slice(0, 3).map(p => (
-                              <div
-                                key={p}
-                                className={`w-1.5 h-1.5 rounded-full ${PLATFORM_CONFIG[p].bgColor}`}
-                                title={PLATFORM_CONFIG[p].label}
-                              />
-                            ))}
-                            <span className="text-[11px] text-theme-muted ml-1 truncate font-medium">{user.role}</span>
-                          </div>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <UserList 
+                  users={filteredUsers} 
+                  selectedUser={selectedUser} 
+                  onSelectUser={(u) => {
+                    handleUserSelection(u);
+                    setGlobalSearchQuery('');
+                  }} 
+                  highlightText={highlightText}
+                  searchQuery={globalSearchQuery}
+                />
               </>
             )}
 
@@ -305,62 +178,14 @@ const Sidebar: React.FC = () => {
                 <p className="text-sm text-theme-muted font-medium">No results found</p>
                 <p className="text-xs text-theme-muted mt-1">Try searching for keywords, dates, or contact names</p>
               </div>
-            ) : globalSearchResults.length === 0 ? (
-              <div className="px-4 py-4 text-xs text-theme-muted text-center">
-                No messages found
-              </div>
             ) : (
-              <ul>
-                {globalSearchResults.map(msg => {
-                  const user = users.find(u => u.id === msg.userId);
-                  const config = PLATFORM_CONFIG[msg.platform];
-                  return (
-                    <li key={msg.id} className="border-b border-theme last:border-0">
-                      <button
-                        onClick={() => handleSearchResultClick(msg)}
-                        className="w-full text-left px-4 py-4 hover:bg-theme-hover transition-all group"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            {user?.avatarUrl ? (
-                              <img
-                                src={user.avatarUrl}
-                                alt={user.name}
-                                className="w-6 h-6 rounded-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-6 h-6 rounded-full bg-theme-base flex items-center justify-center text-[10px] font-bold text-theme-main border border-theme">
-                                {user?.avatarInitials}
-                              </div>
-                            )}
-                            <span className="text-xs font-bold text-theme-main group-hover:text-blue-400 transition-colors">
-                              {user?.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded bg-theme-base border border-theme ${config.color}`}>
-                              {config.label}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-[11px] text-theme-muted leading-relaxed line-clamp-2">
-                          {msg.subject && (
-                             <div className="text-theme-main font-bold mb-0.5 truncate italic">
-                               {highlightText(msg.subject, globalSearchQuery)}
-                             </div>
-                          )}
-                          {highlightText(msg.content, globalSearchQuery)}
-                        </div>
-                        <div className="mt-2 flex items-center gap-2 text-[9px] text-theme-muted font-mono">
-                           <Clock className="w-3 h-3" />
-                           {msg.timestamp.toLocaleDateString()} {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                           <span className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-blue-500 font-bold">VIEW →</span>
-                        </div>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <MessageSearchResults 
+                results={globalSearchResults}
+                users={users}
+                onResultClick={handleSearchResultClick}
+                highlightText={highlightText}
+                searchQuery={globalSearchQuery}
+              />
             )}
           </div>
         )}
