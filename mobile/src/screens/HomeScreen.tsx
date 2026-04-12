@@ -8,7 +8,7 @@ export default function HomeScreen({ navigation }: RootStackScreenProps<'Home'>)
       <Text style={styles.title}>Inbox</Text>
       <Button 
         title="Go to Chat" 
-        onPress={() => navigation.navigate('Chat', { id: '1', name: 'Alice' })} 
+        onPress={() => navigation.navigate('Chat', { chatId: '1', name: 'Alice' })} 
       />
       <Button 
         title="Go to Settings" 

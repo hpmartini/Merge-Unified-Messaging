@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import type { RootStackScreenProps } from '../navigation/types';
 
 export default function ChatScreen({ route }: RootStackScreenProps<'Chat'>) {
-  const { name } = route.params;
+  const { chatId, name } = route.params;
   
   return (
     <View style={styles.container}>
