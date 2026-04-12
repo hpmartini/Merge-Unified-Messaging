@@ -35,6 +35,7 @@ export interface WhatsAppMessage {
   hasMedia: boolean;
   type: string;
   media?: WhatsAppMedia | null;
+  status?: string;
 }
 
 export type WhatsAppStatus = 'disconnected' | 'connecting' | 'qr' | 'authenticated' | 'ready' | 'error';
@@ -241,6 +242,22 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
               if (optionsRef.current.onMessage) {
                 optionsRef.current.onMessage(msg);
               }
+              break;
+
+            case 'receiptMessage':
+              setMessages(prev => {
+                const newMap = new Map(prev);
+                const chatMsgs = newMap.get(data.chatId);
+                if (!chatMsgs) return prev;
+                const msgIdx = chatMsgs.findIndex(m => m.id === data.messageId);
+                if (msgIdx >= 0) {
+                  const updatedMsgs = [...chatMsgs];
+                  updatedMsgs[msgIdx] = { ...updatedMsgs[msgIdx], status: data.status };
+                  newMap.set(data.chatId, updatedMsgs);
+                  return newMap;
+                }
+                return prev;
+              });
               break;
           }
         } catch (e) {

@@ -62,6 +62,7 @@ export const normalizeSignalMessage = (sigMsg: SignalMessage, chatId: string, se
     timestamp: new Date(sigMsg.timestamp * 1000),
     isMe: sigMsg.fromMe,
     hash: sigMsg.id.substring(0, 7),
-    attachments
+    attachments,
+    status: sigMsg.status
   };
 };

@@ -16,5 +16,6 @@ export const normalizeTelegramMessage = (tgMsg: TelegramMessage): Message => ({
   content: tgMsg.text,
   timestamp: new Date(tgMsg.timestamp),
   isMe: tgMsg.sender === 'me',
-  hash: tgMsg.id.toString().substring(0, 7)
+  hash: tgMsg.id.toString().substring(0, 7),
+  status: tgMsg.status
 });

@@ -53,6 +53,7 @@ export interface Message {
   replyToPlatform?: Platform;
   replyToContent?: string;
   attachments?: Attachment[];
+  status?: 'sent' | 'delivered' | 'read' | 'failed' | string;
 }
 
 export interface PlatformConfig {

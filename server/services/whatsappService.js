@@ -102,6 +102,17 @@ export function saveMessage(sessionId, chatId, message) {
   }
 }
 
+export function updateMessageStatus(sessionId, chatId, messageId, status) {
+  const messages = loadData(sessionId, 'messages');
+  if (!messages[chatId]) return;
+
+  const existingIdx = messages[chatId].findIndex(m => m.id === messageId);
+  if (existingIdx >= 0) {
+    messages[chatId][existingIdx].status = status;
+    saveData(sessionId, 'messages', messages);
+  }
+}
+
 export function saveChat(sessionId, chat) {
   const chats = loadData(sessionId, 'chats');
   const idx = chats.findIndex(c => c.id === chat.id);
@@ -308,6 +319,18 @@ export function createWhatsAppClient(sessionId) {
 
   client.on('change_state', (state) => {
     console.log(`[${sessionId}] Client state changed:`, state);
+  });
+
+  client.on('message_ack', (msg, ack) => {
+    let status = 'sent';
+    if (ack === 2) status = 'delivered';
+    else if (ack === 3 || ack === 4) status = 'read';
+
+    const chatId = msg.fromMe ? msg.to : msg.from;
+    const msgId = msg.id._serialized || msg.id;
+
+    updateMessageStatus(sessionId, chatId, msgId, status);
+    broadcastToSession(sessionId, { type: 'receiptMessage', messageId: msgId, chatId, status });
   });
 
   client.on('message', async (message) => {

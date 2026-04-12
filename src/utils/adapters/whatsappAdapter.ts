@@ -53,6 +53,7 @@ export const normalizeWhatsAppMessage = (waMsg: WhatsAppMessage, chatId: string,
     timestamp: new Date(waMsg.timestamp * 1000),
     isMe: waMsg.fromMe,
     hash: waMsg.id.substring(0, 7),
-    attachments
+    attachments,
+    status: waMsg.status
   };
 };

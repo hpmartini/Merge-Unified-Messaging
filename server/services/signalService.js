@@ -73,6 +73,17 @@ export function saveMessage(sessionId, chatId, message) {
     saveData(sessionId, 'messages', messages);
   }
 }
+
+export function updateMessageStatus(sessionId, chatId, messageId, status) {
+  const messages = loadData(sessionId, 'messages');
+  if (!messages[chatId]) return;
+
+  const existingIdx = messages[chatId].findIndex(m => m.id === messageId || m.id.startsWith(messageId));
+  if (existingIdx >= 0) {
+    messages[chatId][existingIdx].status = status;
+    saveData(sessionId, 'messages', messages);
+  }
+}
 export function saveChat(sessionId, chat) {
   const chats = loadData(sessionId, 'chats');
   const idx = chats.findIndex(c => c.id === chat.id);
@@ -186,7 +197,32 @@ export function sendJsonRpc(process, method, params = {}) {
 function handleIncomingMessage(sessionId, params) {
   const { envelope } = params;
   if (!envelope) return;
-  const { source, sourceNumber, sourceName, timestamp, dataMessage, syncMessage, contactsMessage, typingMessage } = envelope;
+  const { source, sourceNumber, sourceName, timestamp, dataMessage, syncMessage, contactsMessage, typingMessage, receiptMessage } = envelope;
+
+  if (receiptMessage) {
+    const chatId = sourceNumber || source;
+    let status = 'sent';
+    if (receiptMessage.type === 1) status = 'delivered'; // DeliveryReceipt
+    else if (receiptMessage.type === 2) status = 'read'; // ReadReceipt
+    else if (receiptMessage.type === 3) status = 'read'; // ViewedReceipt
+
+    if (receiptMessage.timestamps) {
+      for (const ts of receiptMessage.timestamps) {
+        const msgId = `${ts}_${chatId}_sent`; // We stored sent messages as `${sentTimestamp}_${chatId}_sent`
+        updateMessageStatus(sessionId, chatId, msgId, status);
+        broadcastToSession(sessionId, { type: 'receiptMessage', messageId: msgId, chatId, status });
+      }
+    }
+  }
+
+  if (syncMessage && syncMessage.readMessages) {
+    for (const rm of syncMessage.readMessages) {
+      const chatId = rm.senderNumber || rm.sender;
+      const msgId = `${rm.timestamp}_${chatId}`;
+      updateMessageStatus(sessionId, chatId, msgId, 'read');
+      broadcastToSession(sessionId, { type: 'receiptMessage', messageId: msgId, chatId, status: 'read' });
+    }
+  }
 
   if (contactsMessage) {
     const procData = signalProcesses.get(sessionId);
