@@ -35,6 +35,8 @@ export interface Attachment {
   size: string;
   mimetype?: string;
   mediaType?: 'image' | 'video' | 'audio' | 'document';
+  uploadProgress?: number; // 0 to 100
+  isUploading?: boolean;
 }
 
 export interface Message {

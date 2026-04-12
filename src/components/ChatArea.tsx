@@ -130,16 +130,36 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
+        const attachmentId = Math.random().toString(36).substring(7);
         const newAttachment: Attachment = {
-          id: Math.random().toString(36).substring(7),
+          id: attachmentId,
           type: file.type.startsWith('image/') ? 'image' : 'document',
           name: file.name,
           url: result,
-          size: (file.size / 1024).toFixed(1) + ' KB'
+          size: (file.size / 1024).toFixed(1) + ' KB',
+          isUploading: true,
+          uploadProgress: 0
         };
         setDraftAttachments(prev => [...prev, newAttachment]);
-        processedCount++;
-        if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
+        
+        // Mock API upload progress
+        let progress = 0;
+        const intervalId = setInterval(() => {
+          progress += Math.floor(Math.random() * 20) + 10; // 10-30% steps
+          if (progress >= 100) {
+            progress = 100;
+            clearInterval(intervalId);
+            setDraftAttachments(prev => prev.map(att => 
+              att.id === attachmentId ? { ...att, isUploading: false, uploadProgress: 100 } : att
+            ));
+            processedCount++;
+            if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
+          } else {
+            setDraftAttachments(prev => prev.map(att => 
+              att.id === attachmentId ? { ...att, uploadProgress: progress } : att
+            ));
+          }
+        }, 300);
       };
       reader.onerror = () => {
         processedCount++;

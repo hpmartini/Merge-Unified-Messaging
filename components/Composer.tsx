@@ -422,23 +422,36 @@ const Composer: React.FC<ComposerProps> = ({
           <div className="flex flex-wrap gap-2 mb-2 animate-in fade-in zoom-in duration-200">
             {draftAttachments.map(att => (
               <div key={att.id} className="relative group">
-                <div className="w-12 h-12 rounded-lg border border-theme bg-theme-base overflow-hidden shadow-lg">
+                <div className="w-12 h-12 rounded-lg border border-theme bg-theme-base overflow-hidden shadow-lg relative">
                   {att.type === 'image' ? (
                     <img src={att.url} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center"><FileText className="w-5 h-5 text-blue-500" /></div>
                   )}
+                  {att.isUploading && (
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
+                      <div className="w-8 h-1.5 bg-gray-700 rounded-full overflow-hidden mb-1">
+                        <div 
+                          className="h-full bg-blue-500 transition-all duration-300"
+                          style={{ width: `${att.uploadProgress || 0}%` }}
+                        />
+                      </div>
+                      <span className="text-[9px] text-white font-bold">{att.uploadProgress || 0}%</span>
+                    </div>
+                  )}
                 </div>
-                <button 
-                  type="button" 
-                  onClick={() => onRemoveAttachment(att.id)}
-                  className="absolute -top-1.5 -right-1.5 bg-theme-panel border border-theme rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-3 h-3 text-theme-muted" />
-                </button>
+                {!att.isUploading && (
+                  <button 
+                    type="button" 
+                    onClick={() => onRemoveAttachment(att.id)}
+                    className="absolute -top-1.5 -right-1.5 bg-theme-panel border border-theme rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3 text-theme-muted" />
+                  </button>
+                )}
               </div>
             ))}
-            {isUploading && (
+            {isUploading && !draftAttachments.some(a => a.isUploading) && (
               <div className="w-12 h-12 rounded-lg border border-theme border-dashed flex items-center justify-center animate-pulse">
                 <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
               </div>
