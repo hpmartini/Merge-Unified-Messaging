@@ -1,6 +1,6 @@
 import pkg from 'whatsapp-web.js';
 const { Client, LocalAuth } = pkg;
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -177,22 +177,53 @@ export async function downloadMedia(message, sessionId) {
   try {
     if (!message.hasMedia) return null;
 
+    const safeId = String(message.id.id).replace(/[^a-zA-Z0-9_-]/g, '');
+
+    // Caching Strategy: Check if file already exists on disk before fetching from network
+    const files = readdirSync(MEDIA_DIR);
+    const cachedFile = files.find(f => f.startsWith(`${safeId}.`));
+    
+    if (cachedFile) {
+      const filepath = join(MEDIA_DIR, cachedFile);
+      const stats = statSync(filepath);
+      
+      // We can infer mimetype from the extension for the cache
+      const ext = cachedFile.substring(cachedFile.lastIndexOf('.'));
+      let guessedMime = 'application/octet-stream';
+      const mimeMap = {
+        '.jpg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.mp4': 'video/mp4',
+        '.3gp': 'video/3gpp',
+        '.mov': 'video/quicktime',
+        '.ogg': 'audio/ogg',
+        '.mp3': 'audio/mpeg',
+        '.m4a': 'audio/mp4',
+        '.aac': 'audio/aac',
+        '.pdf': 'application/pdf',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      };
+      guessedMime = mimeMap[ext] || 'application/octet-stream';
+
+      console.log(`[${sessionId}] Using cached media: ${cachedFile}`);
+      return {
+        url: `/media/${cachedFile}`,
+        mimetype: guessedMime,
+        type: getMediaType(guessedMime),
+        filename: cachedFile,
+        filesize: stats.size
+      };
+    }
+
     const media = await message.downloadMedia();
     if (!media) return null;
 
     const ext = getMediaExtension(media.mimetype);
-    const filename = `${message.id.id}${ext}`;
+    const filename = `${safeId}${ext}`;
     const filepath = join(MEDIA_DIR, filename);
-
-    if (existsSync(filepath)) {
-      return {
-        url: `/media/${filename}`,
-        mimetype: media.mimetype,
-        type: getMediaType(media.mimetype),
-        filename: media.filename || filename,
-        filesize: media.filesize
-      };
-    }
 
     const buffer = Buffer.from(media.data, 'base64');
     writeFileSync(filepath, buffer);
