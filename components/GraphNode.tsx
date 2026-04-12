@@ -204,9 +204,9 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                  <span className="text-theme-muted">/</span>
                  <span className={isTargeted ? 'text-blue-400 font-bold' : ''}>{dateStr}</span>
                  
-                 {isMe && message.status === 'sent' && <Check className="w-3.5 h-3.5 text-theme-muted" title="Sent" />}
-                 {isMe && message.status === 'delivered' && <CheckCheck className="w-3.5 h-3.5 text-theme-muted" title="Delivered" />}
-                 {isMe && message.status === 'read' && <CheckCheck className="w-3.5 h-3.5 text-blue-500" title="Read" />}
+                 {isMe && message.status === 'sent' && <Check className="w-3.5 h-3.5 text-theme-muted" title="Sent" aria-label="Sent" role="img" />}
+                 {isMe && message.status === 'delivered' && <CheckCheck className="w-3.5 h-3.5 text-theme-muted" title="Delivered" aria-label="Delivered" role="img" />}
+                 {isMe && message.status === 'read' && <CheckCheck className="w-3.5 h-3.5 text-blue-500" title="Read" aria-label="Read" role="img" />}
 
                  {isTargeted && <Search className="w-3 h-3 text-blue-500" />}
 
