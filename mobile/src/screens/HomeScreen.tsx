@@ -17,7 +17,7 @@ const mockChats: ChatItem[] = [
 ];
 
 export default function HomeScreen({ navigation }: RootStackScreenProps<'Home'>) {
-  const renderItem = ({ item }: { item: ChatItem }) => (
+  const renderItem = React.useCallback(({ item }: { item: ChatItem }) => (
     <TouchableOpacity 
       style={styles.chatItem}
       onPress={() => navigation.navigate('Chat', { chatId: item.id, name: item.name })}
@@ -34,7 +34,7 @@ export default function HomeScreen({ navigation }: RootStackScreenProps<'Home'>)
         </View>
       )}
     </TouchableOpacity>
-  );
+  ), [navigation]);
 
   return (
     <View style={styles.container}>
