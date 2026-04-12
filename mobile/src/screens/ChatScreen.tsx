@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ListRenderItem } from 'react-native';
 import type { RootStackScreenProps } from '../navigation/types';
 import { MessageBubble, Message } from '../components/MessageBubble';
 
@@ -7,8 +7,8 @@ export default function ChatScreen({ route }: RootStackScreenProps<'Chat'>) {
   const { chatId, name } = route.params;
   
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: `Hi there! I'm ${name}`, isOutgoing: false, timestamp: '10:00 AM' },
     { id: '2', text: 'Hello! How are you?', isOutgoing: true, timestamp: '10:01 AM', status: 'read' },
+    { id: '1', text: `Hi there! I'm ${name}`, isOutgoing: false, timestamp: '10:00 AM' },
   ]);
   const [inputText, setInputText] = useState('');
 
@@ -23,9 +23,14 @@ export default function ChatScreen({ route }: RootStackScreenProps<'Chat'>) {
       status: 'sent',
     };
     
-    setMessages((prev) => [...prev, newMessage]);
+    setMessages((prev) => [newMessage, ...prev]);
     setInputText('');
   };
+
+  const renderItem: ListRenderItem<Message> = useCallback(
+    ({ item }) => <MessageBubble message={item} />,
+    []
+  );
 
   return (
     <KeyboardAvoidingView 
@@ -35,8 +40,9 @@ export default function ChatScreen({ route }: RootStackScreenProps<'Chat'>) {
     >
       <FlatList
         data={messages}
+        inverted
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <MessageBubble message={item} />}
+        renderItem={renderItem}
         contentContainerStyle={styles.listContent}
         testID="chat-list"
       />

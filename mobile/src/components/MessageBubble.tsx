@@ -13,7 +13,7 @@ interface Props {
   message: Message;
 }
 
-export const MessageBubble: React.FC<Props> = ({ message }) => {
+export const MessageBubble = React.memo(({ message }: Props) => {
   const { text, isOutgoing, timestamp, status } = message;
 
   return (
@@ -39,7 +39,7 @@ export const MessageBubble: React.FC<Props> = ({ message }) => {
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
