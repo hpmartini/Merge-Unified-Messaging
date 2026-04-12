@@ -24,6 +24,12 @@ const App: React.FC = () => {
   const signalServerPortRef = useRef<number | null>(null);
   const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
+  useEffect(() => {
+    return () => {
+      Object.values(typingTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
+
   const { users, selectedUser, setSelectedUser, theme, setTypingUser } = useAppStore();
 
   const handleTyping = useCallback((chatId: string, isTyping: boolean) => {
