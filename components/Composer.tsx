@@ -7,7 +7,8 @@ import { GoogleGenAI } from "@google/genai";
 import { 
   Send, ChevronDown, X, CornerUpLeft, 
   Bold, Italic, Code, List, 
-  Paperclip, Loader2, FileText, Smile, Sparkles, Wand2
+  Paperclip, Loader2, FileText, Smile, Sparkles, Wand2,
+  Mic, Square, Trash
 } from 'lucide-react';
 
 interface ComposerProps {
@@ -75,7 +76,23 @@ const Composer: React.FC<ComposerProps> = ({
   const [isAIDropdownOpen, setIsAIDropdownOpen] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   
+  // Voice Note states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedUser.activePlatforms.includes(selectedPlatform)) {
@@ -166,6 +183,69 @@ const Composer: React.FC<ComposerProps> = ({
       onAddFiles(e.target.files);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const audioFile = new File([audioBlob], `voicenote_${Date.now()}.webm`, { type: 'audio/webm' });
+          
+          // Create a FileList-like structure or just pass array since onAddFiles accepts File[]
+          onAddFiles([audioFile]);
+        }
+        audioChunksRef.current = [];
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      // Clear chunks so onstop doesn't save it
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   };
 
   // Helper to get the direct child of editor from a node
@@ -578,53 +658,93 @@ const Composer: React.FC<ComposerProps> = ({
         <div className="flex items-end gap-2 group">
           <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileSelect} />
           
-          <div className={`flex-1 relative flex items-end bg-theme-base border rounded-2xl transition-all shadow-inner ${isGeneratingAI ? 'border-indigo-500/50' : 'border-theme group-focus-within:border-blue-500/50'}`}>
-            <button 
-              type="button" 
-              onClick={() => fileInputRef.current?.click()}
-              className="p-3 text-theme-muted hover:text-blue-500 transition-colors"
-            >
-              <Paperclip className="w-5 h-5" />
-            </button>
+          <div className={`flex-1 relative flex items-center bg-theme-base border rounded-2xl transition-all shadow-inner ${isGeneratingAI ? 'border-indigo-500/50' : 'border-theme group-focus-within:border-blue-500/50'}`}>
+            {!isRecording ? (
+              <>
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="p-3 text-theme-muted hover:text-blue-500 transition-colors self-end"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
 
-            {/* LIVE EDITABLE CONTENT DIV */}
-            <div
-                ref={editorRef}
-                contentEditable={!isGeneratingAI}
-                onInput={updateContentState}
-                onKeyDown={handleKeyDown}
-                data-placeholder={isGeneratingAI ? "AI is writing..." : `Message ${selectedUser.name}... (Try '# ' for Header, '- ' for List)`}
-                className="rich-editor flex-1 bg-transparent text-theme-main py-3 pr-10 font-sans text-sm focus:outline-none min-h-[44px] max-h-60 overflow-y-auto disabled:opacity-50 break-words whitespace-pre-wrap"
-                suppressContentEditableWarning={true}
-            />
+                {/* LIVE EDITABLE CONTENT DIV */}
+                <div
+                    ref={editorRef}
+                    contentEditable={!isGeneratingAI}
+                    onInput={updateContentState}
+                    onKeyDown={handleKeyDown}
+                    data-placeholder={isGeneratingAI ? "AI is writing..." : `Message ${selectedUser.name}... (Try '# ' for Header, '- ' for List)`}
+                    className="rich-editor flex-1 bg-transparent text-theme-main py-3 pr-10 font-sans text-sm focus:outline-none min-h-[44px] max-h-60 overflow-y-auto disabled:opacity-50 break-words whitespace-pre-wrap"
+                    suppressContentEditableWarning={true}
+                />
 
-            <div className="absolute right-2 bottom-1.5">
-              <button 
-                type="button" 
-                onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
-                className={`p-1.5 rounded-full transition-colors ${isEmojiPickerOpen ? 'bg-blue-500/20 text-blue-400' : 'text-theme-muted hover:text-amber-500 hover:bg-theme-hover'}`}
-              >
-                <Smile className="w-5 h-5" />
-              </button>
-              {isEmojiPickerOpen && (
-                <EmojiPicker onSelect={insertEmoji} onClose={() => setIsEmojiPickerOpen(false)} />
-              )}
-            </div>
+                <div className="absolute right-2 bottom-1.5 flex items-center">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsEmojiPickerOpen(!isEmojiPickerOpen)}
+                    className={`p-1.5 rounded-full transition-colors ${isEmojiPickerOpen ? 'bg-blue-500/20 text-blue-400' : 'text-theme-muted hover:text-amber-500 hover:bg-theme-hover'}`}
+                  >
+                    <Smile className="w-5 h-5" />
+                  </button>
+                  {isEmojiPickerOpen && (
+                    <EmojiPicker onSelect={insertEmoji} onClose={() => setIsEmojiPickerOpen(false)} />
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-between py-2 px-4 min-h-[44px]">
+                <div className="flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                  <span className="text-red-500 font-medium text-sm">{formatDuration(recordingDuration)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={cancelRecording} className="p-2 text-theme-muted hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors">
+                    <Trash className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={(!hasContent && draftAttachments.length === 0) || isUploading || isGeneratingAI}
-            className={`
-              w-11 h-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 shadow-lg active:scale-90
-              ${(hasContent || draftAttachments.length > 0) && !isUploading && !isGeneratingAI
-                ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40' 
-                : 'bg-theme-hover text-theme-muted cursor-not-allowed'}
-            `}
-          >
-            {isUploading || isGeneratingAI ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-          </button>
+          {!isRecording && (!hasContent && draftAttachments.length === 0) ? (
+            <button
+              type="button"
+              onClick={startRecording}
+              disabled={isUploading || isGeneratingAI}
+              className={`
+                w-11 h-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 shadow-lg active:scale-90
+                ${isUploading || isGeneratingAI
+                  ? 'bg-theme-hover text-theme-muted cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}
+              `}
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+          ) : isRecording ? (
+            <button
+              type="button"
+              onClick={stopRecording}
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 shadow-lg active:scale-90 bg-red-500 hover:bg-red-600 text-white shadow-red-900/40"
+            >
+              <Square className="w-5 h-5 fill-current" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isUploading || isGeneratingAI}
+              className={`
+                w-11 h-11 rounded-full flex items-center justify-center transition-all flex-shrink-0 shadow-lg active:scale-90
+                ${isUploading || isGeneratingAI
+                  ? 'bg-theme-hover text-theme-muted cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/40'}
+              `}
+            >
+              {isUploading || isGeneratingAI ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+            </button>
+          )}
         </div>
       </div>
     </div>
