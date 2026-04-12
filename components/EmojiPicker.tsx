@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, X, Smile, Dog, Utensils, Hash, Lamp } from 'lucide-react';
 
 interface EmojiData {
@@ -59,6 +59,19 @@ interface EmojiPickerProps {
 const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('smileys');
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [onClose]);
 
   const filteredEmojis = useMemo(() => {
     if (search.trim()) {
@@ -68,7 +81,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) => {
   }, [search, activeCategory]);
 
   return (
-    <div className="absolute bottom-full right-0 mb-3 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-[100] flex flex-col animate-in zoom-in duration-200">
+    <div ref={pickerRef} className="absolute bottom-full right-0 mb-3 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-[100] flex flex-col animate-in zoom-in duration-200">
       <div className="p-2 border-b border-slate-800 bg-slate-950/50">
         <div className="relative">
           <Search className="absolute left-2 top-2 w-3.5 h-3.5 text-slate-500" />
@@ -89,6 +102,9 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) => {
             key={cat.id}
             onClick={() => setActiveCategory(cat.id)}
             className={`p-2 rounded-md transition-colors ${activeCategory === cat.id ? 'text-blue-500 bg-blue-500/10' : 'text-slate-500 hover:text-slate-300'}`}
+            title={cat.label}
+            aria-label={cat.label}
+            aria-pressed={activeCategory === cat.id}
           >
             <cat.icon className="w-4 h-4" />
           </button>
@@ -101,6 +117,8 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({ onSelect, onClose }) => {
             key={idx}
             onClick={() => onSelect(emoji.char)}
             className="w-8 h-8 flex items-center justify-center text-lg hover:bg-slate-800 rounded-md transition-all active:scale-90"
+            title={emoji.name}
+            aria-label={emoji.name}
           >
             {emoji.char}
           </button>

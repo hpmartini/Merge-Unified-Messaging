@@ -226,11 +226,14 @@ const GraphNode: React.FC<GraphNodeProps> = ({
 
                  {isTargeted && <Search className="w-3 h-3 text-blue-500" />}
 
-                 <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex items-center">
+                 <div className="relative opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ml-2 flex items-center">
                    <button 
                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
                      className="p-1 hover:bg-theme-hover rounded text-theme-muted hover:text-blue-400"
                      title="Add reaction"
+                     aria-label="Add reaction"
+                     aria-expanded={showEmojiPicker}
+                     aria-haspopup="true"
                    >
                      <SmilePlus className="w-3 h-3" />
                    </button>
@@ -241,7 +244,7 @@ const GraphNode: React.FC<GraphNodeProps> = ({
 
                  <button 
                    onClick={() => onReply(message)}
-                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-theme-hover rounded text-theme-muted hover:text-blue-400"
+                   className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity p-1 hover:bg-theme-hover rounded text-theme-muted hover:text-blue-400"
                    title="Reply to this message"
                  >
                    <CornerUpLeft className="w-3 h-3" />

@@ -92,7 +92,11 @@ export const useAppStore = create<AppState>((set) => ({
     if (state.typingUsers[chatId] === isTyping) return state;
     return { typingUsers: { ...state.typingUsers, [chatId]: isTyping } };
   }),
-  updateMessageReactions: (messageId, reactions) => set((state) => ({
-    messages: state.messages.map(m => m.id === messageId ? { ...m, reactions } : m)
-  })),
+  updateMessageReactions: (messageId, reactions) => set((state) => {
+    const msgIndex = state.messages.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return state;
+    const newMessages = [...state.messages];
+    newMessages[msgIndex] = { ...newMessages[msgIndex], reactions };
+    return { messages: newMessages };
+  }),
 }));
