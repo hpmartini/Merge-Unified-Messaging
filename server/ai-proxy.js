@@ -168,23 +168,15 @@ function sanitize(text) {
 
 // Serve media statically
 const __dirname = dirname(fileURLToPath(import.meta.url));
+import { createUploadMiddleware } from './utils/uploadHandler.js';
+
 const MEDIA_DIR = join(__dirname, 'data', 'media');
 if (!fs.existsSync(MEDIA_DIR)) fs.mkdirSync(MEDIA_DIR, { recursive: true });
 app.use('/media', authenticate, express.static(MEDIA_DIR));
 
 // Upload endpoint
-const upload = multer({ dest: MEDIA_DIR });
-app.post('/api/upload', authenticate, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  if (req.file.originalname.includes('/') || req.file.originalname.includes('\\') || req.file.originalname.includes('..')) {
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    return res.status(400).json({ error: 'Invalid filename: Path traversal detected' });
-  }
-  const ext = extname(req.file.originalname);
-  const finalName = req.file.filename + ext;
-  fs.renameSync(req.file.path, join(MEDIA_DIR, finalName));
-  res.json({ url: `/media/${finalName}`, type: req.file.mimetype, size: req.file.size, name: req.file.originalname });
-});
+const { upload, handleUpload } = createUploadMiddleware(MEDIA_DIR);
+app.post('/api/upload', authenticate, upload.single('file'), handleUpload);
 
 app.use('/api/auth', authRouter);
 

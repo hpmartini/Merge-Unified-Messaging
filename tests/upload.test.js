@@ -53,4 +53,19 @@ describe('POST /api/upload', () => {
       expect(res.body.url).not.toMatch(/\.\.\//);
     }
   });
+
+  it('should reject invalid file types', async () => {
+    const invalidFilePath = join(__dirname, 'test-invalid.exe');
+    fs.writeFileSync(invalidFilePath, 'MZ...'); // Fake executable
+    
+    const res = await request(app)
+      .post('/api/upload')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', invalidFilePath);
+    
+    fs.unlinkSync(invalidFilePath);
+    
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Invalid file type/);
+  });
 });
