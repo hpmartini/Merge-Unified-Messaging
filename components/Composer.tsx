@@ -80,7 +80,9 @@ const Composer: React.FC<ComposerProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
+  const isCancelledRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,8 +90,13 @@ const Composer: React.FC<ComposerProps> = ({
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current) {
+        if (mediaRecorderRef.current.state === 'recording') {
+          mediaRecorderRef.current.stop();
+        }
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
@@ -188,6 +195,7 @@ const Composer: React.FC<ComposerProps> = ({
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
@@ -200,7 +208,7 @@ const Composer: React.FC<ComposerProps> = ({
 
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(track => track.stop());
-        if (audioChunksRef.current.length > 0) {
+        if (!isCancelledRef.current && audioChunksRef.current.length > 0) {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           const audioFile = new File([audioBlob], `voicenote_${Date.now()}.webm`, { type: 'audio/webm' });
           
@@ -212,6 +220,7 @@ const Composer: React.FC<ComposerProps> = ({
 
       mediaRecorder.start();
       setIsRecording(true);
+      isCancelledRef.current = false;
       setRecordingDuration(0);
       
       timerRef.current = setInterval(() => {
@@ -234,7 +243,7 @@ const Composer: React.FC<ComposerProps> = ({
 
   const cancelRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      // Clear chunks so onstop doesn't save it
+      isCancelledRef.current = true;
       audioChunksRef.current = [];
       mediaRecorderRef.current.stop();
       setIsRecording(false);

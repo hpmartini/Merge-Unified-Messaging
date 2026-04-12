@@ -68,9 +68,14 @@ describe('Composer Voice Notes', () => {
     });
 
     const mockMediaRecorder = {
-      start: vi.fn(),
+      start: vi.fn(function() {
+        this.state = 'recording';
+      }),
       stop: vi.fn(function() {
         this.state = 'inactive';
+        if (this.ondataavailable) {
+          this.ondataavailable({ data: new Blob(['audio'], { type: 'audio/webm' }) });
+        }
         if (this.onstop) this.onstop();
       }),
       state: 'inactive',
@@ -78,7 +83,7 @@ describe('Composer Voice Notes', () => {
       onstop: null,
     };
     
-    global.MediaRecorder = vi.fn().mockImplementation(() => mockMediaRecorder) as any;
+    global.MediaRecorder = vi.fn().mockImplementation(function() { return mockMediaRecorder; }) as any;
   });
 
   it('toggles recording UI when mic button is clicked', async () => {
