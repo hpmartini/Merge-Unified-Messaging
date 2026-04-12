@@ -51,7 +51,7 @@ describe('API Proxy', () => {
         .post('/api/ai/summarize')
         .send({ contactName: 'Test' });
       expect(res.status).toBe(400);
-      expect(res.body.details[0].path).toBe('messages');
+      expect(res.body.errors[0].path).toBe('messages');
     });
 
     it('returns 400 for completely invalid payload structure', async () => {

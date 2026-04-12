@@ -14,7 +14,7 @@ export function validate(schema) {
         logger.info({ errors: issues }, 'Validation failed');
         return res.status(400).json({
           error: 'Validation failed',
-          details: issues.map(e => ({
+          errors: issues.map(e => ({
             path: e.path ? e.path.join('.') : '',
             message: e.message
           }))
