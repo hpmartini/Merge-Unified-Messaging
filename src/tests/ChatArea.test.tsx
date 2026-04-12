@@ -107,3 +107,50 @@ describe('ChatArea Component Rendering Attachments', () => {
     expect(mockSetActivePDF).toHaveBeenCalledWith(mockMessages[1].attachments[0]);
   });
 });
+describe('ChatArea Drag and Drop', () => {
+  beforeEach(() => {
+    (useAppStore as any).mockReturnValue({
+      selectedUser: {
+        id: '1',
+        name: 'Test User',
+        avatarInitials: 'TU',
+        activePlatforms: [Platform.WhatsApp],
+        alternateIds: []
+      },
+      messages: [],
+      visiblePlatforms: new Set([Platform.WhatsApp]),
+      targetMessageId: null,
+      globalSearchQuery: '',
+      draftAttachments: [],
+      replyingTo: null,
+      setVisiblePlatforms: vi.fn(),
+      setReplyingTo: vi.fn(),
+      setIsGalleryOpen: vi.fn(),
+      setLightboxImage: vi.fn(),
+      setActivePDF: vi.fn(),
+      setDraftAttachments: vi.fn(),
+      setLocalSearchQuery: vi.fn(),
+      setTargetMessageId: vi.fn(),
+      setSummary: vi.fn()
+    });
+  });
+
+  it('shows overlay when dragging files over ChatArea', () => {
+    const { container } = render(<ChatArea whatsapp={{}} signal={{}} />);
+    
+    // The main container is the first child
+    const chatContainer = container.firstChild as HTMLElement;
+    
+    // Mock dataTransfer with items to simulate dragging files
+    const mockDataTransfer = {
+      items: [{ kind: 'file' }]
+    };
+
+    fireEvent.dragEnter(chatContainer, { dataTransfer: mockDataTransfer });
+    
+    // Look for the "Attach to Conversation" overlay text
+    expect(screen.getByText('Attach to Conversation')).toBeInTheDocument();
+
+    fireEvent.dragLeave(chatContainer);
+  });
+});
