@@ -21,6 +21,7 @@ interface AppState {
   isSearching: boolean;
   showGlobalSearch: boolean;
   globalSearchResults: Message[];
+  typingUsers: Record<string, boolean>;
   
   // Actions
   setUsers: (users: User[] | ((prev: User[]) => User[])) => void;
@@ -41,6 +42,7 @@ interface AppState {
   setIsSearching: (isSearching: boolean) => void;
   setShowGlobalSearch: (show: boolean) => void;
   setGlobalSearchResults: (results: Message[]) => void;
+  setTypingUser: (chatId: string, isTyping: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -62,6 +64,7 @@ export const useAppStore = create<AppState>((set) => ({
   isSearching: false,
   showGlobalSearch: false,
   globalSearchResults: [],
+  typingUsers: {},
   
   setUsers: (users) => set((state) => ({ users: typeof users === 'function' ? users(state.users) : users })),
   setSelectedUser: (selectedUser) => set({ selectedUser }),
@@ -83,4 +86,9 @@ export const useAppStore = create<AppState>((set) => ({
   setIsSearching: (isSearching) => set({ isSearching }),
   setShowGlobalSearch: (showGlobalSearch) => set({ showGlobalSearch }),
   setGlobalSearchResults: (globalSearchResults) => set({ globalSearchResults }),
+  setTypingUser: (chatId, isTyping) => set((state) => {
+    // Only update if changed
+    if (state.typingUsers[chatId] === isTyping) return state;
+    return { typingUsers: { ...state.typingUsers, [chatId]: isTyping } };
+  }),
 }));

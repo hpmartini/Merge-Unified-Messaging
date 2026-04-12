@@ -16,7 +16,7 @@ export interface ChatAreaProps {
 
 export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, email, slack }) => {
   // Store state
-  const { selectedUser } = useAppStore();
+  const { selectedUser, typingUsers } = useAppStore();
   const { messages, setMessages, setUsers } = useAppStore();
   const { visiblePlatforms, setVisiblePlatforms } = useAppStore();
   const { targetMessageId, setTargetMessageId, setSummary } = useAppStore();
@@ -347,6 +347,13 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
                 singleChannel={selectedUser.activePlatforms.length === 1}
               />
             ))
+          )}
+          {selectedUser && typingUsers[selectedUser.id] && (
+            <div className="flex items-center gap-1 p-4 ml-12">
+              <span className="w-2 h-2 rounded-full bg-theme-muted animate-bounce" style={{ animationDelay: '0ms' }}></span>
+              <span className="w-2 h-2 rounded-full bg-theme-muted animate-bounce" style={{ animationDelay: '150ms' }}></span>
+              <span className="w-2 h-2 rounded-full bg-theme-muted animate-bounce" style={{ animationDelay: '300ms' }}></span>
+            </div>
           )}
         </div>
 

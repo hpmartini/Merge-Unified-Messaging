@@ -20,6 +20,7 @@ export interface TelegramMessage {
 interface UseTelegramOptions {
   onChatsLoaded?: (chats: TelegramChat[]) => void;
   onMessagesLoaded?: (chatId: string, messages: TelegramMessage[]) => void;
+  onTyping?: (chatId: string, isTyping: boolean) => void;
 }
 
 export function useTelegram(options: UseTelegramOptions = {}, pollIntervalMs = 5000) {

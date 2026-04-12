@@ -45,6 +45,7 @@ interface UseWhatsAppOptions {
   onChatsLoaded?: (chats: WhatsAppChat[]) => void;
   onMessagesLoaded?: (chatId: string, messages: WhatsAppMessage[]) => void;
   onReady?: (user: WhatsAppUser) => void;
+  onTyping?: (chatId: string, isTyping: boolean) => void;
 }
 
 interface UseWhatsAppReturn {
@@ -211,6 +212,12 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
                 optionsRef.current.onMessagesLoaded(data.chatId, data.messages);
               } else {
                 console.log('[WhatsApp] No onMessagesLoaded callback!');
+              }
+              break;
+
+            case 'typing':
+              if (optionsRef.current.onTyping) {
+                optionsRef.current.onTyping(data.chatId, data.isTyping);
               }
               break;
 

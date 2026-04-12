@@ -22,10 +22,24 @@ const App: React.FC = () => {
 
   const serverPortRef = useRef<number | null>(null);
   const signalServerPortRef = useRef<number | null>(null);
+  const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
-  const { users, selectedUser, setSelectedUser, theme } = useAppStore();
+  const { users, selectedUser, setSelectedUser, theme, setTypingUser } = useAppStore();
+
+  const handleTyping = useCallback((chatId: string, isTyping: boolean) => {
+    setTypingUser(chatId, isTyping);
+    if (typingTimeoutsRef.current[chatId]) {
+      clearTimeout(typingTimeoutsRef.current[chatId]);
+    }
+    if (isTyping) {
+      typingTimeoutsRef.current[chatId] = setTimeout(() => {
+        setTypingUser(chatId, false);
+      }, 5000); // 5 second timeout
+    }
+  }, [setTypingUser]);
 
   const telegram = useTelegram({
+    onTyping: handleTyping,
     onChatsLoaded: useCallback((chats: TelegramChat[]) => {
       mergeUsers(chats.map(normalizeTelegramChat), Platform.Telegram);
     }, [mergeUsers]),
@@ -53,6 +67,7 @@ const App: React.FC = () => {
   });
 
   const whatsapp = useWhatsApp('merge-app', {
+    onTyping: handleTyping,
     onMessage: useCallback((waMsg: WhatsAppMessage) => {
       const chatId = waMsg.contactId || waMsg.id.split('_')[0];
       mergeMessages([normalizeWhatsAppMessage(waMsg, chatId, serverPortRef.current)]);
@@ -71,6 +86,7 @@ const App: React.FC = () => {
   }, [whatsapp.serverPort]);
 
   const signal = useSignal('merge-app', {
+    onTyping: handleTyping,
     onMessage: useCallback((sigMsg: SignalMessage) => {
       const chatId = sigMsg.contactId || sigMsg.id; 
       mergeMessages([normalizeSignalMessage(sigMsg, chatId, signalServerPortRef.current)], true);

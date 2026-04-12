@@ -53,6 +53,7 @@ interface UseSignalOptions {
   onMessagesLoaded?: (chatId: string, messages: SignalMessage[]) => void;
   onReady?: (user: SignalUser) => void;
   onLinkUri?: (uri: string) => void;
+  onTyping?: (chatId: string, isTyping: boolean) => void;
 }
 
 interface UseSignalReturn {
@@ -233,6 +234,12 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
               });
               if (optionsRef.current.onMessagesLoaded) {
                 optionsRef.current.onMessagesLoaded(data.chatId, data.messages);
+              }
+              break;
+
+            case 'typing':
+              if (optionsRef.current.onTyping) {
+                optionsRef.current.onTyping(data.chatId, data.isTyping);
               }
               break;
 
