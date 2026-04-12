@@ -300,13 +300,17 @@ ${historyText}`;
 // Error handler
 
 // POST /api/messages/:id/react
-app.post('/api/messages/:id/react', async (req, res) => {
+app.post('/api/messages/:id/react', authenticate, async (req, res) => {
   try {
     const messageId = req.params.id;
     const { platform, chatId, reaction } = req.body;
     
     if (!platform || !chatId || !reaction) {
       return res.status(400).json({ error: 'Missing required fields: platform, chatId, reaction' });
+    }
+
+    if (typeof reaction !== 'string' || reaction.length > 10) {
+      return res.status(400).json({ error: 'Invalid reaction format' });
     }
 
     let success = false;

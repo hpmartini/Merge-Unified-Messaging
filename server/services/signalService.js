@@ -282,6 +282,19 @@ function handleIncomingMessage(sessionId, params) {
 
   if (dataMessage && dataMessage.reaction) {
     const react = dataMessage.reaction;
+    
+    const messages = loadData(sessionId, 'messages');
+    let found = false;
+    for (const [chatId, sessionMsgList] of Object.entries(messages)) {
+      const msg = sessionMsgList.find(m => m.timestamp === Math.floor(react.targetSentTimestamp / 1000));
+      if (msg) {
+        if (!msg.reactions) msg.reactions = [];
+        msg.reactions.push({ emoji: react.emoji, sender: sourceNumber });
+        found = true;
+      }
+    }
+    if (found) saveData(sessionId, 'messages', messages);
+
     const wsc = wsConnections.get(sessionId);
     if (wsc) {
       for (const ws of wsc) {

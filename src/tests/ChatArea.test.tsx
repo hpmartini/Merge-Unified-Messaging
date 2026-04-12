@@ -65,6 +65,7 @@ describe('ChatArea Component Rendering Attachments', () => {
         activePlatforms: [Platform.WhatsApp],
         alternateIds: []
       },
+      typingUsers: {},
       messages: mockMessages,
       visiblePlatforms: new Set([Platform.WhatsApp]),
       targetMessageId: null,
@@ -117,6 +118,7 @@ describe('ChatArea Drag and Drop', () => {
         activePlatforms: [Platform.WhatsApp],
         alternateIds: []
       },
+      typingUsers: {},
       messages: [],
       visiblePlatforms: new Set([Platform.WhatsApp]),
       targetMessageId: null,

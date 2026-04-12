@@ -375,6 +375,16 @@ export function createWhatsAppClient(sessionId) {
     const chatId = reaction.msgId.remote;
     const emoji = reaction.reaction;
     
+    const messages = loadData(sessionId, 'messages');
+    if (messages[chatId]) {
+      const msg = messages[chatId].find(m => m.id === msgId);
+      if (msg) {
+        if (!msg.reactions) msg.reactions = [];
+        msg.reactions.push({ emoji, sender: reaction.senderId });
+        saveData(sessionId, 'messages', messages);
+      }
+    }
+
     const wsc = wsConnections.get(sessionId);
     if (wsc) {
       for (const ws of wsc) {
