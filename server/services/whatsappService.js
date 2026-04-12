@@ -369,6 +369,20 @@ export function createWhatsAppClient(sessionId) {
     }
   });
 
+  
+  client.on('message_reaction', async (reaction) => {
+    const msgId = reaction.msgId._serialized;
+    const chatId = reaction.msgId.remote;
+    const emoji = reaction.reaction;
+    
+    const wsc = wsConnections.get(sessionId);
+    if (wsc) {
+      for (const ws of wsc) {
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'reaction', platform: 'whatsapp', msgId, chatId, emoji, sender: reaction.senderId }));
+      }
+    }
+  });
+
   client.on('message', async (message) => {
     console.log(`[${sessionId}] New message from ${message.from}`);
 

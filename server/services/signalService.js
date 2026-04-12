@@ -280,6 +280,16 @@ function handleIncomingMessage(sessionId, params) {
     return;
   }
 
+  if (dataMessage && dataMessage.reaction) {
+    const react = dataMessage.reaction;
+    const wsc = wsConnections.get(sessionId);
+    if (wsc) {
+      for (const ws of wsc) {
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'reaction', platform: 'signal', targetTs: react.targetSentTimestamp, emoji: react.emoji, sender: sourceNumber }));
+      }
+    }
+  }
+
   if (dataMessage) {
     const chatId = sourceNumber || source;
     const msgData = {
