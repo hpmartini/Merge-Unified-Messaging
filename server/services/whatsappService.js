@@ -352,6 +352,17 @@ export function createWhatsAppClient(sessionId) {
     broadcastToSession(sessionId, { type: 'receiptMessage', messageId: msgId, chatId, status });
   });
 
+  client.on('typing', (chat) => {
+    // Note: whatsapp-web.js 'typing' event might not fire depending on the fork,
+    // but this is the standard way to capture it.
+    broadcastToSession(sessionId, {
+      type: 'typing',
+      chatId: chat.id._serialized || chat.id,
+      isTyping: true,
+      provider: 'whatsapp'
+    });
+  });
+
   client.on('message', async (message) => {
     console.log(`[${sessionId}] New message from ${message.from}`);
 

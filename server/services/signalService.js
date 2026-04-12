@@ -262,7 +262,17 @@ function handleIncomingMessage(sessionId, params) {
     return;
   }
 
-  if (typingMessage) return;
+  if (typingMessage) {
+    const chatId = sourceNumber || source;
+    const isTyping = typingMessage.action === "STARTED";
+    broadcastToSession(sessionId, {
+      type: 'typing',
+      chatId,
+      isTyping,
+      provider: 'signal'
+    });
+    return;
+  }
 
   if (dataMessage) {
     const chatId = sourceNumber || source;
