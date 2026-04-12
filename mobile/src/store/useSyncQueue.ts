@@ -17,6 +17,31 @@ interface SyncQueueState {
   clearQueue: () => void;
 }
 
+const robustStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    try {
+      return await AsyncStorage.getItem(name);
+    } catch (e) {
+      console.warn('AsyncStorage getItem error', e);
+      return null;
+    }
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(name, value);
+    } catch (e) {
+      console.warn('AsyncStorage setItem error', e);
+    }
+  },
+  removeItem: async (name: string): Promise<void> => {
+    try {
+      await AsyncStorage.removeItem(name);
+    } catch (e) {
+      console.warn('AsyncStorage removeItem error', e);
+    }
+  },
+};
+
 export const useSyncQueue = create<SyncQueueState>()(
   persist(
     (set) => ({
@@ -53,7 +78,7 @@ export const useSyncQueue = create<SyncQueueState>()(
     }),
     {
       name: 'sync-queue-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => robustStorage),
     }
   )
 );
