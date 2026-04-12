@@ -37,7 +37,21 @@ export const createUploadMiddleware = (mediaDir) => {
       // file-type might not detect plain text files. Fallback to req.file.mimetype if it's text/plain.
       let mimeType = fileType ? fileType.mime : null;
       if (!mimeType && req.file.mimetype === 'text/plain') {
-        mimeType = 'text/plain';
+        // Validate that it does not contain null bytes (basic binary check)
+        const buffer = Buffer.alloc(4096);
+        const fd = fs.openSync(req.file.path, 'r');
+        const bytesRead = fs.readSync(fd, buffer, 0, 4096, 0);
+        fs.closeSync(fd);
+        let isBinary = false;
+        for (let i = 0; i < bytesRead; i++) {
+          if (buffer[i] === 0x00) {
+            isBinary = true;
+            break;
+          }
+        }
+        if (!isBinary) {
+          mimeType = 'text/plain';
+        }
       }
 
       if (!mimeType || !ALLOWED_MIME_TYPES.includes(mimeType)) {

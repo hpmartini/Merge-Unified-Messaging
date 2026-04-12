@@ -68,4 +68,21 @@ describe('POST /api/upload', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/Invalid file type/);
   });
+
+  it('should prevent text/plain fallback bypass for binary files', async () => {
+    const bypassFilePath = join(__dirname, 'test-bypass.txt');
+    // Create a file with a null byte to simulate a binary that file-type might miss
+    const buffer = Buffer.from([0x61, 0x62, 0x63, 0x00, 0x64]);
+    fs.writeFileSync(bypassFilePath, buffer);
+    
+    const res = await request(app)
+      .post('/api/upload')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', bypassFilePath, { contentType: 'text/plain' });
+    
+    fs.unlinkSync(bypassFilePath);
+    
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Invalid file type/);
+  });
 });
