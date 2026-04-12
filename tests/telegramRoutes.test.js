@@ -68,7 +68,7 @@ describe('Telegram Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: mockResponse });
-      expect(telegramService.sendMessage).toHaveBeenCalledWith('123', 'World');
+      expect(telegramService.sendMessage).toHaveBeenCalledWith('123', 'World', { attachments: undefined });
     });
 
     it('should validate request body with Zod and return 400', async () => {
