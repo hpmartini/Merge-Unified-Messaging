@@ -99,3 +99,82 @@ describe('GraphNode Attachment Rendering', () => {
     expect(onDocView).toHaveBeenCalledWith(messageWithDoc.attachments[0]);
   });
 });
+
+describe('GraphNode Message Status Rendering', () => {
+  const mockUser = {
+    id: '1',
+    name: 'Test User',
+    avatarInitials: 'TU',
+    activePlatforms: [Platform.WhatsApp],
+  };
+
+  const baseMyMessage = {
+    id: 'msg-1',
+    userId: '1',
+    platform: Platform.WhatsApp,
+    content: 'Hello World',
+    timestamp: new Date(),
+    isMe: true,
+    hash: '123456',
+  };
+
+  it('renders a single checkmark for sent status', () => {
+    render(
+      <GraphNode
+        message={{ ...baseMyMessage, status: 'sent' }}
+        activePlatforms={[Platform.WhatsApp]}
+        visiblePlatforms={new Set([Platform.WhatsApp])}
+        user={mockUser}
+        onReply={vi.fn()}
+        onImageClick={vi.fn()}
+      />
+    );
+    expect(screen.getByTitle('Sent')).toBeInTheDocument();
+  });
+
+  it('renders a double checkmark for delivered status', () => {
+    render(
+      <GraphNode
+        message={{ ...baseMyMessage, status: 'delivered' }}
+        activePlatforms={[Platform.WhatsApp]}
+        visiblePlatforms={new Set([Platform.WhatsApp])}
+        user={mockUser}
+        onReply={vi.fn()}
+        onImageClick={vi.fn()}
+      />
+    );
+    expect(screen.getByTitle('Delivered')).toBeInTheDocument();
+  });
+
+  it('renders a blue double checkmark for read status', () => {
+    render(
+      <GraphNode
+        message={{ ...baseMyMessage, status: 'read' }}
+        activePlatforms={[Platform.WhatsApp]}
+        visiblePlatforms={new Set([Platform.WhatsApp])}
+        user={mockUser}
+        onReply={vi.fn()}
+        onImageClick={vi.fn()}
+      />
+    );
+    const readCheck = screen.getByTitle('Read');
+    expect(readCheck).toBeInTheDocument();
+    expect(readCheck).toHaveClass('text-blue-500');
+  });
+
+  it('does not render status for incoming messages', () => {
+    render(
+      <GraphNode
+        message={{ ...baseMyMessage, isMe: false, status: 'read' }}
+        activePlatforms={[Platform.WhatsApp]}
+        visiblePlatforms={new Set([Platform.WhatsApp])}
+        user={mockUser}
+        onReply={vi.fn()}
+        onImageClick={vi.fn()}
+      />
+    );
+    expect(screen.queryByTitle('Read')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Sent')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Delivered')).not.toBeInTheDocument();
+  });
+});

@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, Platform, User, Attachment } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
-import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2, MessagesSquare } from 'lucide-react';
+import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2, MessagesSquare, Check, CheckCheck } from 'lucide-react';
 import AudioWaveform from './AudioWaveform';
 
 interface GraphNodeProps {
@@ -204,7 +204,11 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                  <span className="text-theme-muted">/</span>
                  <span className={isTargeted ? 'text-blue-400 font-bold' : ''}>{dateStr}</span>
                  
-                 {isTargeted && <Search className="w-3 h-3 text-blue-500 ml-1" />}
+                 {isMe && message.status === 'sent' && <Check className="w-3.5 h-3.5 text-theme-muted" title="Sent" />}
+                 {isMe && message.status === 'delivered' && <CheckCheck className="w-3.5 h-3.5 text-theme-muted" title="Delivered" />}
+                 {isMe && message.status === 'read' && <CheckCheck className="w-3.5 h-3.5 text-blue-500" title="Read" />}
+
+                 {isTargeted && <Search className="w-3 h-3 text-blue-500" />}
 
                  <button 
                    onClick={() => onReply(message)}
