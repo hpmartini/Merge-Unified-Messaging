@@ -285,6 +285,14 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                               key={att.id}
                               className="rounded-md overflow-hidden border border-theme cursor-zoom-in relative group/img shadow-lg bg-theme-base"
                               onClick={() => onImageClick(att)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  onImageClick(att);
+                                }
+                              }}
                             >
                               <img src={att.url} alt={att.name} className="w-full h-auto object-cover max-h-[300px]" />
                               <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/40 transition-colors flex items-center justify-center">
@@ -332,6 +340,7 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                       {/* Attachment Toggle Button */}
                       <button
                         onClick={() => setIsExpanded(!isExpanded)}
+                        aria-expanded={isExpanded}
                         className={`
                           flex items-center gap-2 px-3 py-1.5 rounded-md border text-[10px] font-bold uppercase tracking-wider transition-all
                           ${isExpanded
