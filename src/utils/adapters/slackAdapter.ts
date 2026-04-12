@@ -9,7 +9,7 @@ export const normalizeSlackChat = (chat: SlackChat): User => ({
   role: chat.isChannel ? 'Slack Channel' : 'Slack Contact'
 });
 
-export const normalizeSlackMessage = (msg: SlackMessage): Message => ({
+export const normalizeSlackMessage = (msg: SlackMessage, serverPort?: number | null): Message => ({
   id: `slack-${msg.id}`,
   userId: `slack-${msg.chatId}`,
   platform: Platform.Slack,
@@ -18,5 +18,9 @@ export const normalizeSlackMessage = (msg: SlackMessage): Message => ({
   isMe: msg.sender === 'me',
   hash: msg.id.toString().substring(0, 7),
   replyToId: msg.threadId ? `slack-${msg.threadId}` : undefined,
-  replyToPlatform: msg.threadId ? Platform.Slack : undefined
+  replyToPlatform: msg.threadId ? Platform.Slack : undefined,
+  attachments: msg.attachments?.map(att => ({
+    ...att,
+    url: serverPort ? `http://localhost:${serverPort}${att.url}` : att.url
+  })) || []
 });

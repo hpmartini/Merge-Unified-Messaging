@@ -195,11 +195,15 @@ export function getMediaExtension(mimetype) {
   return mimeMap[baseMime] || '';
 }
 
-export function getMediaType(mimetype) {
-  const baseMime = mimetype.split(';')[0].trim();
+export function getMediaType(mimetype, filename = '') {
+  const baseMime = mimetype ? mimetype.split(';')[0].trim() : '';
   if (baseMime.startsWith('image/')) return 'image';
   if (baseMime.startsWith('video/')) return 'video';
   if (baseMime.startsWith('audio/')) return 'audio';
+  if (filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    if (['ogg', 'm4a', 'mp3', 'wav'].includes(ext)) return 'audio';
+  }
   return 'document';
 }
 
@@ -242,7 +246,7 @@ export async function downloadMedia(message, sessionId) {
       return {
         url: `/media/${cachedFile}`,
         mimetype: guessedMime,
-        type: getMediaType(guessedMime),
+        type: getMediaType(guessedMime, cachedFile),
         filename: cachedFile,
         filesize: stats.size
       };
@@ -262,7 +266,7 @@ export async function downloadMedia(message, sessionId) {
     return {
       url: `/media/${filename}`,
       mimetype: media.mimetype,
-      type: getMediaType(media.mimetype),
+      type: getMediaType(media.mimetype, media.filename || filename),
       filename: media.filename || filename,
       filesize: buffer.length
     };

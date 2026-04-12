@@ -325,9 +325,15 @@ function handleIncomingMessage(sessionId, params) {
           const finalPath = join(MEDIA_DIR, finalName);
           try {
             fs.copyFileSync(storedFile, finalPath);
-            const mediaType = att.contentType?.startsWith('image') ? 'image' : 
+            let mediaType = att.contentType?.startsWith('image') ? 'image' : 
                               att.contentType?.startsWith('video') ? 'video' : 
                               att.contentType?.startsWith('audio') ? 'audio' : 'document';
+            if (mediaType === 'document') {
+              const ext = fileName.split('.').pop().toLowerCase();
+              if (['ogg', 'm4a', 'mp3', 'wav'].includes(ext)) {
+                mediaType = 'audio';
+              }
+            }
             attachmentsList.push({
               id: fileId, type: mediaType === 'image' ? 'image' : 'document',
               mediaType, url: `/media/${finalName}`, name: fileName,

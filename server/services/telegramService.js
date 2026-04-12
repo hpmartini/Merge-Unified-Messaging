@@ -87,7 +87,13 @@ class TelegramService {
               const finalPath = path.join(MEDIA_DIR, finalName);
               fs.writeFileSync(finalPath, Buffer.from(buffer));
               
-              const mediaType = msg.photo ? 'image' : msg.video ? 'video' : msg.audio || msg.voice ? 'audio' : 'document';
+              let mediaType = msg.photo ? 'image' : msg.video ? 'video' : msg.audio || msg.voice ? 'audio' : 'document';
+              if (mediaType === 'document') {
+                const ext = fileName.split('.').pop().toLowerCase();
+                if (['ogg', 'm4a', 'mp3', 'wav'].includes(ext) || fileObj.mime_type?.startsWith('audio/')) {
+                  mediaType = 'audio';
+                }
+              }
               attachments.push({
                 id: fileId,
                 type: mediaType === 'image' ? 'image' : 'document',

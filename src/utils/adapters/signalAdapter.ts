@@ -41,16 +41,26 @@ export const normalizeSignalMessage = (sigMsg: SignalMessage, chatId: string, se
   const userId = `sig-${chatId}`;
 
   let attachments: Attachment[] = [];
-  if (sigMsg.media && serverPort) {
-    const mediaUrl = `http://localhost:${serverPort}${sigMsg.media.url}`;
+  if (sigMsg.attachments && sigMsg.attachments.length > 0) {
+    attachments = sigMsg.attachments.map(att => ({
+      id: att.id,
+      type: att.type,
+      name: att.name,
+      url: serverPort ? `http://localhost:${serverPort}${att.url}` : att.url,
+      size: att.size,
+      mimetype: att.mimetype,
+      mediaType: att.mediaType
+    }));
+  } else if (sigMsg.media && serverPort && typeof sigMsg.media === 'object') {
+    const mediaUrl = `http://localhost:${serverPort}${(sigMsg.media as any).url}`;
     attachments = [{
       id: sigMsg.id,
-      type: sigMsg.media.type === 'image' || sigMsg.media.type === 'video' ? 'image' : 'document',
-      name: sigMsg.media.filename,
+      type: (sigMsg.media as any).type === 'image' || (sigMsg.media as any).type === 'video' ? 'image' : 'document',
+      name: (sigMsg.media as any).filename,
       url: mediaUrl,
-      size: sigMsg.media.filesize ? `${(sigMsg.media.filesize / 1024).toFixed(1)} KB` : '',
-      mimetype: sigMsg.media.mimetype,
-      mediaType: sigMsg.media.type
+      size: (sigMsg.media as any).filesize ? `${((sigMsg.media as any).filesize / 1024).toFixed(1)} KB` : '',
+      mimetype: (sigMsg.media as any).mimetype,
+      mediaType: (sigMsg.media as any).type
     }];
   }
 

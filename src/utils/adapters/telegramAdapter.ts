@@ -9,7 +9,7 @@ export const normalizeTelegramChat = (chat: TelegramChat): User => ({
   role: 'Telegram Chat'
 });
 
-export const normalizeTelegramMessage = (tgMsg: TelegramMessage): Message => ({
+export const normalizeTelegramMessage = (tgMsg: TelegramMessage, serverPort?: number | null): Message => ({
   id: `tg-${tgMsg.id}`,
   userId: `tg-${tgMsg.chatId}`,
   platform: Platform.Telegram,
@@ -17,5 +17,9 @@ export const normalizeTelegramMessage = (tgMsg: TelegramMessage): Message => ({
   timestamp: new Date(tgMsg.timestamp),
   isMe: tgMsg.sender === 'me',
   hash: tgMsg.id.toString().substring(0, 7),
+  attachments: tgMsg.attachments?.map(att => ({
+    ...att,
+    url: serverPort ? `http://localhost:${serverPort}${att.url}` : att.url
+  })) || [],
   status: tgMsg.status
 });

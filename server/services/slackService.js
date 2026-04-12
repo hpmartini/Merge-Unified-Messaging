@@ -138,7 +138,13 @@ class SlackService {
             const finalPath = path.join(MEDIA_DIR, finalName);
             fs.writeFileSync(finalPath, Buffer.from(buffer));
             
-            const mediaType = file.mimetype?.startsWith('image') ? 'image' : file.mimetype?.startsWith('video') ? 'video' : file.mimetype?.startsWith('audio') ? 'audio' : 'document';
+            let mediaType = file.mimetype?.startsWith('image') ? 'image' : file.mimetype?.startsWith('video') ? 'video' : file.mimetype?.startsWith('audio') ? 'audio' : 'document';
+            if (mediaType === 'document') {
+              const ext = fileName.split('.').pop().toLowerCase();
+              if (['ogg', 'm4a', 'mp3', 'wav'].includes(ext)) {
+                mediaType = 'audio';
+              }
+            }
             attachments.push({
               id: file.id,
               type: mediaType === 'image' ? 'image' : 'document',

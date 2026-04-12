@@ -15,6 +15,7 @@ export interface TelegramMessage {
   timestamp: string;
   platform: 'telegram';
   status?: string;
+  attachments?: any[];
 }
 
 interface UseTelegramOptions {

@@ -50,7 +50,7 @@ const App: React.FC = () => {
       mergeUsers(chats.map(normalizeTelegramChat), Platform.Telegram);
     }, [mergeUsers]),
     onMessagesLoaded: useCallback((chatId: string, tgMessages: TelegramMessage[]) => {
-      mergeMessages(tgMessages.map(normalizeTelegramMessage));
+      mergeMessages(tgMessages.map(msg => normalizeTelegramMessage(msg)));
     }, [mergeMessages])
   });
 
@@ -59,7 +59,7 @@ const App: React.FC = () => {
       mergeUsers(chats.map(normalizeEmailChat), Platform.Email);
     }, [mergeUsers]),
     onMessagesLoaded: useCallback((chatId: string, emailMsgs: EmailMessage[]) => {
-      mergeMessages(emailMsgs.map(normalizeEmailMessage));
+      mergeMessages(emailMsgs.map(msg => normalizeEmailMessage(msg)));
     }, [mergeMessages])
   });
 
@@ -68,7 +68,7 @@ const App: React.FC = () => {
       mergeUsers(chats.map(normalizeSlackChat), Platform.Slack);
     }, [mergeUsers]),
     onMessagesLoaded: useCallback((chatId: string, slackMsgs: SlackMessage[]) => {
-      mergeMessages(slackMsgs.map(normalizeSlackMessage));
+      mergeMessages(slackMsgs.map(msg => normalizeSlackMessage(msg)));
     }, [mergeMessages])
   });
 
