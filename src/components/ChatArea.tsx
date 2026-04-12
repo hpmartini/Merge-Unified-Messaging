@@ -142,24 +142,55 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
         };
         setDraftAttachments(prev => [...prev, newAttachment]);
         
-        // Mock API upload progress
-        let progress = 0;
-        const intervalId = setInterval(() => {
-          progress += Math.floor(Math.random() * 20) + 10; // 10-30% steps
-          if (progress >= 100) {
-            progress = 100;
-            clearInterval(intervalId);
-            setDraftAttachments(prev => prev.map(att => 
-              att.id === attachmentId ? { ...att, isUploading: false, uploadProgress: 100 } : att
-            ));
-            processedCount++;
-            if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
-          } else {
+        // Actual API upload using XMLHttpRequest
+        const xhr = new XMLHttpRequest();
+        const formData = new FormData();
+        formData.append('file', file);
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const progress = Math.round((e.loaded * 100) / e.total);
             setDraftAttachments(prev => prev.map(att => 
               att.id === attachmentId ? { ...att, uploadProgress: progress } : att
             ));
           }
-        }, 300);
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            let responseUrl = result;
+            try {
+              const res = JSON.parse(xhr.responseText);
+              if (res.url) responseUrl = res.url;
+            } catch (err) {
+              console.error('Failed to parse upload response', err);
+            }
+            setDraftAttachments(prev => prev.map(att => 
+              att.id === attachmentId ? { ...att, isUploading: false, uploadProgress: 100, url: responseUrl } : att
+            ));
+          } else {
+            console.error('Upload failed with status:', xhr.status);
+            setDraftAttachments(prev => prev.filter(att => att.id !== attachmentId));
+          }
+          processedCount++;
+          if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
+        });
+
+        xhr.addEventListener('error', () => {
+          console.error('Upload network error');
+          setDraftAttachments(prev => prev.filter(att => att.id !== attachmentId));
+          processedCount++;
+          if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
+        });
+
+        xhr.open('POST', '/api/upload', true);
+        xhr.withCredentials = true; // Use cookies for authentication
+        
+        // Note: For authorization via token header, if needed:
+        // const token = localStorage.getItem('jwt');
+        // if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+        xhr.send(formData);
       };
       reader.onerror = () => {
         processedCount++;

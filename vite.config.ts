@@ -15,6 +15,10 @@ export default defineConfig({
       '/api/telegram': {
         target: 'http://localhost:3044',
         changeOrigin: true,
+      },
+      '/api/upload': {
+        target: 'http://localhost:3044',
+        changeOrigin: true,
       }
     }
   },
