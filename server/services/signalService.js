@@ -264,13 +264,19 @@ function handleIncomingMessage(sessionId, params) {
 
   if (typingMessage) {
     const chatId = sourceNumber || source;
+    if (!chatId) return;
+    
     const isTyping = typingMessage.action === "STARTED";
-    broadcastToSession(sessionId, {
-      type: 'typing',
-      chatId,
-      isTyping,
-      provider: 'signal'
-    });
+    try {
+      broadcastToSession(sessionId, {
+        type: 'typing',
+        chatId,
+        isTyping,
+        provider: 'signal'
+      });
+    } catch (err) {
+      console.error(`[${sessionId}] Error broadcasting Signal typing event:`, err);
+    }
     return;
   }
 

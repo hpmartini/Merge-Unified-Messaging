@@ -353,14 +353,20 @@ export function createWhatsAppClient(sessionId) {
   });
 
   client.on('typing', (chat) => {
+    if (!chat || !chat.id) return;
+    
     // Note: whatsapp-web.js 'typing' event might not fire depending on the fork,
     // but this is the standard way to capture it.
-    broadcastToSession(sessionId, {
-      type: 'typing',
-      chatId: chat.id._serialized || chat.id,
-      isTyping: true,
-      provider: 'whatsapp'
-    });
+    try {
+      broadcastToSession(sessionId, {
+        type: 'typing',
+        chatId: chat.id._serialized || chat.id,
+        isTyping: true,
+        provider: 'whatsapp'
+      });
+    } catch (err) {
+      console.error(`[${sessionId}] Error broadcasting typing event:`, err);
+    }
   });
 
   client.on('message', async (message) => {
