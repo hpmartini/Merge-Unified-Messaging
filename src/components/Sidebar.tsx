@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { GitBranch, Search, X, Settings } from 'lucide-react';
 import { Message } from '../../types';
@@ -63,12 +63,18 @@ const Sidebar: React.FC = () => {
     ).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   }, [messages, globalSearchQuery]);
 
-  const handleUserSelection = (u: any) => {
+  const handleUserSelection = useCallback((u: any) => {
     setSelectedUser(u);
     setShowMobileChat(true);
-  };
+  }, [setSelectedUser, setShowMobileChat]);
 
-  const handleSearchResultClick = (message: Message) => {
+  const handleUserSelectionAndClearSearch = useCallback((u: any) => {
+    setSelectedUser(u);
+    setShowMobileChat(true);
+    setGlobalSearchQuery('');
+  }, [setSelectedUser, setShowMobileChat, setGlobalSearchQuery]);
+
+  const handleSearchResultClick = useCallback((message: Message) => {
     const user = users.find(u => u.id === message.userId);
     if (user) {
       setTargetMessageId(message.id);
@@ -78,9 +84,9 @@ const Sidebar: React.FC = () => {
       setVisiblePlatforms(nextVisible);
       setShowMobileChat(true);
     }
-  };
+  }, [users, setTargetMessageId, setSelectedUser, visiblePlatforms, setVisiblePlatforms, setShowMobileChat]);
 
-  const highlightText = (text: string, highlight: string) => {
+  const highlightText = useCallback((text: string, highlight: string) => {
     if (!highlight.trim()) return text;
     const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
     return (
@@ -95,7 +101,7 @@ const Sidebar: React.FC = () => {
         ))}
       </span>
     );
-  };
+  }, []);
 
   return (
     <div className="w-full md:w-16 lg:w-80 bg-theme-panel border-r border-theme flex flex-col h-full flex-shrink-0 z-30 group/sidebar">
@@ -154,10 +160,7 @@ const Sidebar: React.FC = () => {
                 <UserList 
                   users={filteredUsers} 
                   selectedUser={selectedUser} 
-                  onSelectUser={(u) => {
-                    handleUserSelection(u);
-                    setGlobalSearchQuery('');
-                  }} 
+                  onSelectUser={handleUserSelectionAndClearSearch} 
                   highlightText={highlightText}
                   searchQuery={globalSearchQuery}
                 />

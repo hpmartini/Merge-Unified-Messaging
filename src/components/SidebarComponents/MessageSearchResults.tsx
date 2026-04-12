@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, memo } from 'react';
 import { PLATFORM_CONFIG } from '../../../constants';
 import { Clock } from 'lucide-react';
 import { Message, User } from '../../../types';
@@ -11,13 +11,19 @@ interface MessageSearchResultsProps {
   searchQuery: string;
 }
 
-export const MessageSearchResults: React.FC<MessageSearchResultsProps> = ({
+export const MessageSearchResults: React.FC<MessageSearchResultsProps> = memo(({
   results,
   users,
   onResultClick,
   highlightText,
   searchQuery
 }) => {
+  const userMap = useMemo(() => {
+    const map = new Map<string, User>();
+    users.forEach(u => map.set(u.id, u));
+    return map;
+  }, [users]);
+
   if (results.length === 0) {
     return (
       <div className="px-4 py-4 text-xs text-theme-muted text-center">
@@ -29,7 +35,7 @@ export const MessageSearchResults: React.FC<MessageSearchResultsProps> = ({
   return (
     <ul>
       {results.map(msg => {
-        const user = users.find(u => u.id === msg.userId);
+        const user = userMap.get(msg.userId);
         const config = PLATFORM_CONFIG[msg.platform];
         return (
           <li key={msg.id} className="border-b border-theme last:border-0">
@@ -79,4 +85,6 @@ export const MessageSearchResults: React.FC<MessageSearchResultsProps> = ({
       })}
     </ul>
   );
-};
+});
+
+MessageSearchResults.displayName = 'MessageSearchResults';

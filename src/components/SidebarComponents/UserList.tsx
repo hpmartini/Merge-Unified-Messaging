@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { PLATFORM_CONFIG } from '../../../constants';
 import { Hash } from 'lucide-react';
 import { formatRelativeTime } from '../../utils/dateUtils';
@@ -12,11 +12,13 @@ interface UserListProps {
   searchQuery?: string;
 }
 
-export const UserList: React.FC<UserListProps> = ({
+const defaultHighlight = (text: string) => text;
+
+export const UserList: React.FC<UserListProps> = memo(({
   users,
   selectedUser,
   onSelectUser,
-  highlightText = (text) => text,
+  highlightText = defaultHighlight,
   searchQuery = ''
 }) => {
   return (
@@ -91,4 +93,6 @@ export const UserList: React.FC<UserListProps> = ({
       ))}
     </ul>
   );
-};
+});
+
+UserList.displayName = 'UserList';
