@@ -1,7 +1,7 @@
 # Current Active Backlog
 
 ## In Progress
-*   **PRD-010 Feature Parity**: Backend media attachments implementation.
+*   **PRD-010 Feature Parity**: [DONE] Backend and Frontend media attachments implementation.
 *   **PRD-011 React Native Mobile**: State management and offline storage integration.
 *   **PRD-012 Clean Code**: Finalizing App.tsx decomposition.
 
