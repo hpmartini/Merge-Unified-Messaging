@@ -35,6 +35,26 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
   // Refs
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const dragCounter = useRef(0);
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  // Global drag-and-drop prevent default to avoid browser navigation
+  useEffect(() => {
+    const handleWindowDragOver = (e: DragEvent) => e.preventDefault();
+    const handleWindowDrop = (e: DragEvent) => e.preventDefault();
+    
+    window.addEventListener('dragover', handleWindowDragOver);
+    window.addEventListener('drop', handleWindowDrop);
+    
+    return () => {
+      window.removeEventListener('dragover', handleWindowDragOver);
+      window.removeEventListener('drop', handleWindowDrop);
+    };
+  }, []);
 
   // Derived state
   const userMessages = useMemo(() => {
@@ -119,11 +139,11 @@ export const ChatArea: React.FC<ChatAreaProps> = ({ whatsapp, signal, telegram, 
         };
         setDraftAttachments(prev => [...prev, newAttachment]);
         processedCount++;
-        if (processedCount === fileArray.length) setIsUploading(false);
+        if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
       };
       reader.onerror = () => {
         processedCount++;
-        if (processedCount === fileArray.length) setIsUploading(false);
+        if (processedCount === fileArray.length && isMounted.current) setIsUploading(false);
       };
       reader.readAsDataURL(file);
     });
