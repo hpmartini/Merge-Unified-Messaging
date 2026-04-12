@@ -21,4 +21,19 @@ describe('useAppStore', () => {
     store.setTheme('light');
     expect(useAppStore.getState().theme).toBe('light');
   });
+
+  it('should update message reactions', () => {
+    const store = useAppStore.getState();
+    const mockMessage = { id: 'msg-1', content: 'hello', timestamp: new Date(), isMe: false, platform: 'WhatsApp', userId: '1', hash: '123' };
+    store.setMessages([mockMessage as any]);
+    
+    store.updateMessageReactions('msg-1', [
+      { emoji: '🔥', users: ['user1'] }
+    ]);
+
+    const updatedMessages = useAppStore.getState().messages;
+    expect(updatedMessages[0].reactions).toBeDefined();
+    expect(updatedMessages[0].reactions![0].emoji).toBe('🔥');
+    expect(updatedMessages[0].reactions![0].users).toContain('user1');
+  });
 });

@@ -100,6 +100,67 @@ describe('GraphNode Attachment Rendering', () => {
   });
 });
 
+describe('GraphNode Reaction Rendering', () => {
+  const mockUser = {
+    id: '1',
+    name: 'Test User',
+    avatarInitials: 'TU',
+    activePlatforms: [Platform.WhatsApp],
+  };
+
+  const messageWithReactions = {
+    id: 'msg-reaction-1',
+    userId: '1',
+    platform: Platform.WhatsApp,
+    content: 'React to me',
+    timestamp: new Date(),
+    isMe: false,
+    hash: 'reaction1',
+    reactions: [
+      { emoji: '🔥', users: ['user1', 'user2'] },
+      { emoji: '😂', users: ['user3'] }
+    ]
+  };
+
+  it('renders reaction badges', () => {
+    render(
+      <GraphNode
+        message={messageWithReactions}
+        activePlatforms={[Platform.WhatsApp]}
+        visiblePlatforms={new Set([Platform.WhatsApp])}
+        user={mockUser}
+        onReply={vi.fn()}
+        onImageClick={vi.fn()}
+      />
+    );
+    expect(screen.getByText('🔥')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument(); // users length
+    expect(screen.getByText('😂')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it('shows emoji picker button on hover context', () => {
+    render(
+      <GraphNode
+        message={{ ...messageWithReactions, reactions: [] }}
+        activePlatforms={[Platform.WhatsApp]}
+        visiblePlatforms={new Set([Platform.WhatsApp])}
+        user={mockUser}
+        onReply={vi.fn()}
+        onImageClick={vi.fn()}
+      />
+    );
+    const emojiButton = screen.getByTitle('Add reaction');
+    expect(emojiButton).toBeInTheDocument();
+    // Initially EmojiPicker not there
+    expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+    
+    // Click button to open picker
+    fireEvent.click(emojiButton);
+    expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
+  });
+});
+
 describe('GraphNode Message Status Rendering', () => {
   const mockUser = {
     id: '1',

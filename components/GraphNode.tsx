@@ -4,8 +4,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, Platform, User, Attachment } from '../types';
 import { PLATFORM_CONFIG } from '../constants';
-import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2, MessagesSquare, Check, CheckCheck } from 'lucide-react';
+import { CornerUpLeft, GitMerge, FileText, Download, ZoomIn, Paperclip, ChevronDown, ChevronUp, Search, Eye, Play, Volume2, MessagesSquare, Check, CheckCheck, SmilePlus } from 'lucide-react';
 import AudioWaveform from './AudioWaveform';
+import EmojiPicker from './EmojiPicker';
 
 interface GraphNodeProps {
   message: Message;
@@ -33,6 +34,7 @@ const GraphNode: React.FC<GraphNodeProps> = ({
   singleChannel = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const nodeRef = useRef<HTMLDivElement>(null);
   
   const config = PLATFORM_CONFIG[message.platform];
@@ -41,6 +43,20 @@ const GraphNode: React.FC<GraphNodeProps> = ({
   // Calculate rail column index
   const railIndex = activePlatforms.indexOf(message.platform);
   
+  const handleReactionSelect = async (emoji: string) => {
+    setShowEmojiPicker(false);
+    try {
+      await fetch(`/api/messages/${message.id}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji })
+      });
+      // Reaction state will be updated via websocket
+    } catch (err) {
+      console.error('Failed to react', err);
+    }
+  };
+
   // Effects
   useEffect(() => {
     if (isTargeted && nodeRef.current) {
@@ -210,9 +226,22 @@ const GraphNode: React.FC<GraphNodeProps> = ({
 
                  {isTargeted && <Search className="w-3 h-3 text-blue-500" />}
 
+                 <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2 flex items-center">
+                   <button 
+                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                     className="p-1 hover:bg-theme-hover rounded text-theme-muted hover:text-blue-400"
+                     title="Add reaction"
+                   >
+                     <SmilePlus className="w-3 h-3" />
+                   </button>
+                   {showEmojiPicker && (
+                     <EmojiPicker onSelect={handleReactionSelect} onClose={() => setShowEmojiPicker(false)} />
+                   )}
+                 </div>
+
                  <button 
                    onClick={() => onReply(message)}
-                   className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 p-1 hover:bg-theme-hover rounded text-theme-muted hover:text-blue-400"
+                   className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-theme-hover rounded text-theme-muted hover:text-blue-400"
                    title="Reply to this message"
                  >
                    <CornerUpLeft className="w-3 h-3" />
@@ -403,6 +432,23 @@ const GraphNode: React.FC<GraphNodeProps> = ({
                     </div>
                   )}
               </div>
+
+              {/* Reaction Badges */}
+              {message.reactions && message.reactions.length > 0 && (
+                <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  {message.reactions.map((r, i) => (
+                    <button 
+                      key={i} 
+                      className="flex items-center gap-1 bg-theme-panel border border-theme rounded-full px-2 py-0.5 text-[11px] hover:bg-theme-hover transition-colors"
+                      onClick={() => handleReactionSelect(r.emoji)}
+                      title={r.users.join(', ')}
+                    >
+                      <span>{r.emoji}</span>
+                      <span className="text-theme-muted font-medium">{r.users.length}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
            </div>
         </div>
 

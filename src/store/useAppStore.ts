@@ -43,6 +43,7 @@ interface AppState {
   setShowGlobalSearch: (show: boolean) => void;
   setGlobalSearchResults: (results: Message[]) => void;
   setTypingUser: (chatId: string, isTyping: boolean) => void;
+  updateMessageReactions: (messageId: string, reactions: { emoji: string; users: string[] }[]) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -91,4 +92,7 @@ export const useAppStore = create<AppState>((set) => ({
     if (state.typingUsers[chatId] === isTyping) return state;
     return { typingUsers: { ...state.typingUsers, [chatId]: isTyping } };
   }),
+  updateMessageReactions: (messageId, reactions) => set((state) => ({
+    messages: state.messages.map(m => m.id === messageId ? { ...m, reactions } : m)
+  })),
 }));

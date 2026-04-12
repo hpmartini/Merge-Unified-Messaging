@@ -54,6 +54,7 @@ export interface Message {
   replyToContent?: string;
   attachments?: Attachment[];
   status?: 'sent' | 'delivered' | 'read' | 'failed' | string;
+  reactions?: { emoji: string; users: string[] }[];
 }
 
 export interface PlatformConfig {
