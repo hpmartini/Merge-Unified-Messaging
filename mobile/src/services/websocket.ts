@@ -5,12 +5,12 @@ const WS_URL = process.env.EXPO_PUBLIC_WS_URL || 'ws://localhost:3000';
 class WebSocketService {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 2000;
+  private maxReconnectAttempts = 10;
   private manualDisconnect = false;
 
   connect() {
-    if (this.ws || this.manualDisconnect) return;
+    this.manualDisconnect = false;
+    if (this.ws) return;
 
     try {
       this.ws = new WebSocket(WS_URL);
@@ -31,6 +31,12 @@ class WebSocketService {
 
       this.ws.onclose = () => {
         console.log('WebSocket disconnected');
+        if (this.ws) {
+          this.ws.onopen = null;
+          this.ws.onmessage = null;
+          this.ws.onclose = null;
+          this.ws.onerror = null;
+        }
         this.ws = null;
         this.reconnect();
       };
@@ -79,10 +85,14 @@ class WebSocketService {
     
     if (this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
+      const baseDelay = 1000;
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s... max 30s
+      const delay = Math.min(baseDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
+      
       setTimeout(() => {
-        console.log(`Reconnecting attempt ${this.reconnectAttempts}...`);
+        console.log(`Reconnecting attempt ${this.reconnectAttempts} after ${delay}ms...`);
         this.connect();
-      }, this.reconnectDelay);
+      }, delay);
     }
   }
 
@@ -97,6 +107,10 @@ class WebSocketService {
   disconnect() {
     this.manualDisconnect = true;
     if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onmessage = null;
+      this.ws.onclose = null;
+      this.ws.onerror = null;
       this.ws.close();
       this.ws = null;
     }
