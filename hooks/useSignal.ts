@@ -247,7 +247,8 @@ export function useSignal(sessionId: string = 'default', options: UseSignalOptio
                 contactId: data.message.from,
                 hasMedia: data.message.hasMedia,
                 type: data.message.type,
-                media: data.message.media
+                media: data.message.media,
+                status: data.message.status
               };
 
               setMessages(prev => {

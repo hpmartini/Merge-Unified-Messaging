@@ -226,7 +226,8 @@ export function useWhatsApp(sessionId: string = 'default', options: UseWhatsAppO
                 contactId: data.message.from.replace('@c.us', ''),
                 hasMedia: data.message.hasMedia,
                 type: data.message.type,
-                media: data.message.media
+                media: data.message.media,
+                status: data.message.status
               };
 
               // Add to messages state (with deduplication)

@@ -85,15 +85,30 @@ export function saveData(sessionId, type, data) {
   }
 }
 
+export const messageStatusCache = new Map();
+
 export function saveMessage(sessionId, chatId, message) {
+  const key = `${sessionId}:${chatId}:${message.id}`;
+  if (messageStatusCache.has(key)) {
+    message.status = messageStatusCache.get(key);
+  }
+
   const messages = loadData(sessionId, 'messages');
   if (!messages[chatId]) messages[chatId] = [];
 
   const existingIdx = messages[chatId].findIndex(m => m.id === message.id);
   if (existingIdx >= 0) {
     const existing = messages[chatId][existingIdx];
+    let updated = false;
     if (message.media && !existing.media) {
-      messages[chatId][existingIdx] = { ...existing, media: message.media };
+      existing.media = message.media;
+      updated = true;
+    }
+    if (message.status && existing.status !== message.status) {
+      existing.status = message.status;
+      updated = true;
+    }
+    if (updated) {
       saveData(sessionId, 'messages', messages);
     }
   } else {
@@ -103,6 +118,10 @@ export function saveMessage(sessionId, chatId, message) {
 }
 
 export function updateMessageStatus(sessionId, chatId, messageId, status) {
+  const key = `${sessionId}:${chatId}:${messageId}`;
+  messageStatusCache.set(key, status);
+  setTimeout(() => messageStatusCache.delete(key), 3600000);
+
   const messages = loadData(sessionId, 'messages');
   if (!messages[chatId]) return;
 
