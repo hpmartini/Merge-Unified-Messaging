@@ -2,50 +2,62 @@ import * as SQLite from 'expo-sqlite';
 import { Message, User, Platform } from '../../../types';
 
 // We can open the database synchronously or asynchronously. Using the async API is recommended for modern Expo.
-let db: SQLite.SQLiteDatabase | null = null;
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 export const getDB = async (): Promise<SQLite.SQLiteDatabase> => {
-  if (!db) {
-    db = await SQLite.openDatabaseAsync('unified_messaging.db');
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabaseAsync('unified_messaging.db');
   }
-  return db;
+  return dbPromise;
 };
 
-export const initDatabase = async (): Promise<void> => {
-  const database = await getDB();
-  
-  await database.execAsync(`
-    PRAGMA journal_mode = WAL;
-    
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      avatarInitials TEXT NOT NULL,
-      avatarUrl TEXT,
-      activePlatforms TEXT NOT NULL,
-      role TEXT,
-      lastMessageTime TEXT,
-      alternateIds TEXT
-    );
+let initPromise: Promise<void> | null = null;
 
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      userId TEXT NOT NULL,
-      platform TEXT NOT NULL,
-      content TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      isMe INTEGER NOT NULL,
-      subject TEXT,
-      hash TEXT NOT NULL,
-      replyToId TEXT,
-      replyToPlatform TEXT,
-      replyToContent TEXT,
-      attachments TEXT,
-      status TEXT,
-      reactions TEXT,
-      FOREIGN KEY(userId) REFERENCES users(id)
-    );
-  `);
+export const initDatabase = async (): Promise<void> => {
+  if (!initPromise) {
+    initPromise = (async () => {
+      try {
+        const database = await getDB();
+        
+        await database.execAsync(`
+          PRAGMA journal_mode = WAL;
+          
+          CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            avatarInitials TEXT NOT NULL,
+            avatarUrl TEXT,
+            activePlatforms TEXT NOT NULL,
+            role TEXT,
+            lastMessageTime TEXT,
+            alternateIds TEXT
+          );
+
+          CREATE TABLE IF NOT EXISTS messages (
+            id TEXT PRIMARY KEY,
+            userId TEXT NOT NULL,
+            platform TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            isMe INTEGER NOT NULL,
+            subject TEXT,
+            hash TEXT NOT NULL,
+            replyToId TEXT,
+            replyToPlatform TEXT,
+            replyToContent TEXT,
+            attachments TEXT,
+            status TEXT,
+            reactions TEXT,
+            FOREIGN KEY(userId) REFERENCES users(id)
+          );
+        `);
+      } catch (error) {
+        initPromise = null; // allow retry
+        throw error;
+      }
+    })();
+  }
+  return initPromise;
 };
 
 export const insertUser = async (user: User): Promise<void> => {
