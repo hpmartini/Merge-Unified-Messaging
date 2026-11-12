@@ -1,0 +1,26 @@
+# Abhängigkeiten und Build-Artefakte werden im Image installiert, nicht aus dem Kontext kopiert.
+**/node_modules
+**/dist
+**/dist-ssr
+**/coverage
+**/.expo
+**/web-build
+
+# Git-Metadaten
+.git
+.gitignore
+
+# Logs und Editor-Kram
+*.log
+.DS_Store
+.idea
+.vscode
+
+# Secrets gehören nicht ins Image (kommen zur Laufzeit via env_file/docker secrets).
+.env
+.env.*
+!.env.staging.example
+secrets/
+
+# signal-cli wird beim Install geladen (postinstall), nicht aus dem Kontext.
+server/signal-cli

@@ -1,0 +1,30 @@
+# Ersetzt GitHub Actions (Account-weite Budget-Sperre, hpmartini/Merge-Unified-Messaging#48):
+# Bun-Install, Build und mobile/-Install, nur beim PR gegen main.
+#
+# Die Vitest-Suite der Root braucht GEMINI_API_KEY und eine Postgres-Instanz und
+# war schon vor der Bun-Umstellung ohne diese nicht grün - sie läuft deshalb lokal
+# (siehe PR-Beschreibung). Die Jest-Tests in mobile/ laufen ohne Secrets.
+when:
+  - event: pull_request
+    branch: main
+
+steps:
+  - name: install
+    image: oven/bun:1.4.4
+    commands:
+      - bun install --frozen-lockfile
+
+  - name: build
+    image: oven/bun:1.4.4
+    commands:
+      - bun run build
+
+  - name: mobile-install
+    image: oven/bun:1.4.4
+    commands:
+      - cd mobile && bun install --frozen-lockfile
+
+  - name: mobile-test
+    image: oven/bun:1.4.4
+    commands:
+      - cd mobile && bun run test

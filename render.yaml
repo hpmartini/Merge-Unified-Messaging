@@ -1,8 +1,11 @@
+# Bun ist Paketmanager; Render-Images haben Bun nicht vorinstalliert, deshalb
+# wird es im buildCommand nachinstalliert. Die Server laufen unter Node
+# (keytar/argon2 sind native Node-Addons).
 services:
   - type: web
     name: merge-frontend
     env: static
-    buildCommand: npm ci && npm run build
+    buildCommand: curl -fsSL https://bun.sh/install | bash && ~/.bun/bin/bun install --frozen-lockfile && ~/.bun/bin/bun run build
     staticPublishPath: ./dist
     routes:
       - type: rewrite
@@ -12,8 +15,8 @@ services:
   - type: web
     name: merge-ai-proxy
     env: node
-    buildCommand: npm ci --omit=dev
-    startCommand: npm run db:migrate && npm start
+    buildCommand: curl -fsSL https://bun.sh/install | bash && ~/.bun/bin/bun install --frozen-lockfile --production
+    startCommand: node server/db/migrate.js && node server/ai-proxy.js
     envVars:
       - key: NODE_ENV
         value: production

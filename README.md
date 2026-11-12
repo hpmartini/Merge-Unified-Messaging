@@ -14,11 +14,11 @@ A unified messaging interface that consolidates conversations from multiple plat
 
 ## Run Locally
 
-**Prerequisites:** Node.js, Docker (optional)
+**Prerequisites:** Bun (Paketmanager), Node.js 22 (Laufzeit der Server), Docker (optional)
 
 1. Install dependencies:
    ```bash
-   npm install
+   bun install
    ```
 2. Set up environment variables:
    Copy `.env.staging.example` to `.env` or `.env.local` and fill in:
@@ -27,7 +27,7 @@ A unified messaging interface that consolidates conversations from multiple plat
    - DB credentials
 3. Run the app:
    ```bash
-   npm run dev
+   bun run dev
    ```
 
 The app will be available at http://localhost:3001

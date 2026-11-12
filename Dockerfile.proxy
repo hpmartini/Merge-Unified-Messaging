@@ -1,13 +1,32 @@
-FROM node:22-alpine
+# Install-Stufe: Bun ist Paketmanager. oven/bun:1.4.4 ist Debian-basiert, damit die
+# nativen Addons (keytar, argon2) fertige glibc-Prebuilds finden.
+FROM oven/bun:1.4.4 AS deps
 
 WORKDIR /app
 
-# Install dependencies (only production)
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json bun.lock ./
+# scripts/ wird vor dem Install kopiert, damit der postinstall-Hook (signal-cli) läuft.
+COPY scripts/ ./scripts/
 
-# Copy the server directory
+# Skripte laufen mit: keytar/argon2 brauchen ihre nativen Binaries,
+# der postinstall-Hook lädt signal-cli für den Signal-Server.
+RUN bun install --frozen-lockfile --production
+
+# Laufzeit: Node 22. keytar/argon2 sind native Node-Addons; die Bun-Runtime
+# garantiert die Node-API-Kompatibilität nicht, die Server laufen daher unter Node.
+FROM node:22-slim
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json ./
 COPY server/ ./server/
+# signal-cli aus dem Install-Schritt mitnehmen (im Repo ist server/signal-cli git-ignoriert).
+COPY --from=deps /app/server/signal-cli ./server/signal-cli
+
+# Datenverzeichnis (server/data/media) gehört dem node-User, sonst schlägt
+# der mkdir beim Start des Proxies als unprivilegierter User fehl.
+RUN mkdir -p /app/server/data/media && chown -R node:node /app/server
 
 # Set non-root user for security
 USER node
@@ -18,4 +37,4 @@ ENV AI_PROXY_PORT=3044
 
 EXPOSE 3044
 
-CMD ["npm", "start"]
+CMD ["node", "server/ai-proxy.js"]
