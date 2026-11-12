@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Downloads and extracts signal-cli for Signal messaging integration.
- * Run automatically via `npm install` postinstall hook.
+ * Run automatically via `bun install` postinstall hook.
  */
 
 import { existsSync, mkdirSync, createWriteStream, unlinkSync } from 'fs';

@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "vitest run --exclude tests/e2e/**",
+    "test": "vitest run --exclude tests/e2e/** --exclude mobile/**",
     "test:watch": "vitest",
-    "dev:all": "concurrently \"npm run dev\" \"npm run proxy\" \"npm run whatsapp\" \"npm run signal\"",
+    "dev:all": "concurrently \"bun run dev\" \"bun run proxy\" \"bun run whatsapp\" \"bun run signal\"",
     "proxy": "node server/ai-proxy.js",
     "whatsapp": "node server/whatsapp-server.js",
     "signal": "node server/signal-server.js",
@@ -18,8 +18,14 @@
     "deploy": "docker-compose -f docker-compose.prod.yml up -d --build",
     "deploy:down": "docker-compose -f docker-compose.prod.yml down",
     "db:migrate": "node server/db/migrate.js",
-    "start:proxy": "npm run db:migrate && node server/ai-proxy.js"
+    "start:proxy": "bun run db:migrate && node server/ai-proxy.js"
   },
+  "packageManager": "bun@1.4.4",
+  "trustedDependencies": [
+    "argon2",
+    "esbuild",
+    "keytar"
+  ],
   "dependencies": {
     "@google/genai": "^1.48.0",
     "@google/generative-ai": "^0.24.1",

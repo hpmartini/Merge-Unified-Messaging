@@ -45,7 +45,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command: sh -c "npm run db:migrate && npm start"
+    command: sh -c "node server/db/migrate.js && node server/ai-proxy.js"
     restart: unless-stopped
     deploy:
       resources:

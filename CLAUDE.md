@@ -8,12 +8,19 @@ Merge is a unified messaging interface built with React 19 and TypeScript. It di
 
 ## Development Commands
 
+Paketmanager ist Bun (`bun install`, `bun run <skript>`). Die Server laufen weiter unter Node
+(`node server/…`): `keytar` (WhatsApp/Signal) und `argon2` sind native Node-Addons, die unter
+der Bun-Runtime nicht zuverlässig funktionieren. Bun ist hier also Paketmanager, nicht Runtime.
+
 ```bash
-npm install      # Install dependencies
-npm run dev      # Start dev server on http://localhost:3001
-npm run build    # Production build
-npm run preview  # Preview production build
+bun install      # Install dependencies
+bun run dev      # Start dev server on http://localhost:3001
+bun run build    # Production build
+bun run preview  # Preview production build
+bun run test     # Vitest (Unit/Integration)
 ```
+
+`mobile/` ist ein eigenes Bun-Projekt (`cd mobile && bun install`, `bun run test`).
 
 ## Environment Setup
 
