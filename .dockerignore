@@ -1,8 +1,10 @@
 # Abhängigkeiten und Build-Artefakte werden im Image installiert, nicht aus dem Kontext kopiert.
-node_modules
-dist
-dist-ssr
-coverage
+**/node_modules
+**/dist
+**/dist-ssr
+**/coverage
+**/.expo
+**/web-build
 
 # Git-Metadaten
 .git
